@@ -100,7 +100,7 @@ timer_sleep (int64_t ticks)
   //Do stuff that is sensitive to interrupts here 
   list_push_back(&holder, &t->hold_elem); //pu
   intr_set_level(old_state);
-  sema_down(&t->elem_sema);
+  thread_block();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -185,8 +185,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
       struct thread *i = list_entry(e, struct thread, hold_elem);
       if(i->done_waiting > ticks)
       {
-	 list_remove(&i->hold_elem);
-         sema_up(&i->elem_sema);  
+	     list_remove(&i->hold_elem);
+         thread_unblock(i); 
       } 
   }
 
