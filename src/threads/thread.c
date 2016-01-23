@@ -339,46 +339,31 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-int get_pri(struct thread *t)
-{
-	int max_priority = t->priority;
-	int checker = 0;
-	if(list_empty(&t->lock_holds))
-	{
-		return t->priority;
-	}
-	struct list_elem *e;
-	for(e = list_begin(&t->lock_holds); e != list_end(&t->lock_holds); e = list_next(e))
-	{
-		struct lock * accessor = list_entry(e, struct lock, acc_elem);
-		struct list_elem *i;
-		for(i = list_begin(&accessor->semaphore.waiters); i != list_end(&accessor->semaphore.waiters); i = list_next(i))
-		{
-			struct thread *q = list_entry(i, struct thread, elem);
-			checker = get_pri(q);
-			if(checker > max_priority)
-			{
-				max_priority = checker;
-			}
-		}
-	}
-	return max_priority;
-}
-
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-  int temp = thread_current()->priority;
-  thread_current() -> old_priority = temp;
-  thread_current ()->priority = new_priority;
+  	  bool stop = false;
+  	  thread_current ()->priority = new_priority;
+  	  if(!list_empty(&ready_list))
+  	  {
+  	  	  struct thread *t = list_entry(list_front(&ready_list()), struct thread, elem);
+  	  	  if(t->priority > new_priority)
+  	  	  {
+  	  	  	  stop = true;
+  	  	  }
+  	  }
+  	  if(stop)
+  	  {
+  	  	  thread_yield();
+  	  }
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return get_pri(thread_current());
+  return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */

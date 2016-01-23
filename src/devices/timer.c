@@ -98,7 +98,7 @@ timer_sleep (int64_t ticks)
   enum intr_level old_state;  //disabling interrupts
   old_state = intr_disable (); 
   //Do stuff that is sensitive to interrupts here 
-  list_push_back(&holder, &t->hold_elem); //pu
+  list_push_back(&sleeping_list, &t->hold_elem); //pu
   intr_set_level(old_state);
   thread_block();
 }

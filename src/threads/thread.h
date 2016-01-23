@@ -93,8 +93,6 @@ struct thread
     
     struct list_elem hold_elem;
     int64_t done_waiting;
-    struct list lock_holds;
-    int old_priority;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -142,5 +140,4 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-int get_pri(struct thread *);
 #endif /* threads/thread.h */
