@@ -31,7 +31,7 @@ static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
 //create our lists
-struct list holder = LIST_INITIALIZER(holder);
+struct list sleeping_list = LIST_INITIALIZER(sleeping_list);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -180,7 +180,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   struct list_elem *e;
-  for(e = list_begin(&holder); e != list_end(&holder); e = list_next(e))
+  for(e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e))
   {
       struct thread *i = list_entry(e, struct thread, hold_elem);
       if(i->done_waiting > ticks)
