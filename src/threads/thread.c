@@ -339,6 +339,34 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+//function TA made in class that works with donations 
+int get_max_priority(struct thread *t)
+{
+	struct list_elem * locks;
+	struct list_elem * waiting;
+	struct lock * picker;
+	struct thread * curr_t;
+	int val = 0;
+	int max = t->priority;
+	if(!list_empty(&t->locked))
+	{
+		for(locks = list_begin(&t->locked); locks != list_end(&t->locked); locks = list_next(locks))
+		{
+			picker = list_entry(locks, struct lock, donations);
+			for(waiting = list_begin(&picker->semaphore.waiters); waiting != list_end(&picker->semaphore.waiters); waiting = list_next(picker))
+			{
+				curr_t = list_entry(waiting, struct thread, elem);
+				val = get_pri(curr_t);
+				if(val > max)
+				{
+					max = val;
+				}
+			}
+		}
+	}
+	return max;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
@@ -363,7 +391,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current()->priority;
+  return get_max_priority(thread_current());
 }
 
 /* Sets the current thread's nice value to NICE. */
