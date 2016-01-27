@@ -356,7 +356,7 @@ int get_max_priority(struct thread *t)
 			for(waiting = list_begin(&picker->semaphore.waiters); waiting != list_end(&picker->semaphore.waiters); waiting = list_next(picker))
 			{
 				curr_t = list_entry(waiting, struct thread, elem);
-				val = get_pri(curr_t);
+				val = get_max_priority(curr_t);
 				if(val > max)
 				{
 					max = val;
