@@ -90,7 +90,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-   
+  
+    int initial;
     struct list locked;
     struct list_elem hold_elem;
     int64_t done_waiting;
@@ -143,4 +144,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 int get_max_priority(struct thread *);
+static bool my_comparator_function(const struct list_elem *, const struct list_elem *, void *aux UNUSED);
+struct thread * max_thread(void);
 #endif /* threads/thread.h */

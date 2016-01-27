@@ -367,21 +367,36 @@ int get_max_priority(struct thread *t)
 	return max;
 }
 
+static bool my_comparator_function(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{//returns true if list entry from a is < list entry from b, else false
+	struct thread * left = list_entry(a, struct thread, elem);
+	struct thread * right = list_entry(b, struct thread, elem);
+	if(get_max_priority(left) < get_max_priority(right))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+struct thread * max_thread(void)
+{
+	struct list_elem *local_max = list_max(&ready_list, my_comparator_function, NULL);
+	struct thread *global_max = list_entry(local_max, struct thread, elem);
+	return global_max;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-  	  bool stop = false;
-  	  thread_current ()->priority = new_priority;
-  	  if(!list_empty(&ready_list))
-  	  {
-  	  	  struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
-  	  	  if(t->priority > new_priority)
-  	  	  {
-  	  	  	  stop = true;
-  	  	  }
-  	  }
-  	  if(stop)
+	  struct thread * curr = thread_current();
+  	  curr->initial = new_priority;
+  	  curr->priority = new_priority;
+  	  struct thread *get_max_thread = max_thread();
+  	  if(get_max_thread->priority > new_priority)
   	  {
   	  	  thread_yield();
   	  }
