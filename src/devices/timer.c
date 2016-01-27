@@ -183,7 +183,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   for(e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e))
   {
       struct thread *i = list_entry(e, struct thread, hold_elem);
-      if(i->done_waiting > ticks)
+      if(i->done_waiting <= ticks)
       {
 	     list_remove(&i->hold_elem);
          thread_unblock(i); 
