@@ -145,5 +145,5 @@ int thread_get_load_avg (void);
 
 int get_max_priority(struct thread *);
 static bool my_comparator_function(const struct list_elem *, const struct list_elem *, void *aux UNUSED);
-struct thread * max_thread(void);
+struct thread * get_max_thread(void);
 #endif /* threads/thread.h */
