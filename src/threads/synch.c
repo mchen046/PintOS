@@ -105,11 +105,6 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-int get_pri(struct semaphore *sema){
-	
-}
-
-
 void
 sema_up (struct semaphore *sema) 
 {
@@ -125,25 +120,7 @@ sema_up (struct semaphore *sema)
 	sema->value++;
 	intr_set_level (old_level);
 
-	struct thread *t = sema->holder; //thread that is holding this lock
-	struct list_elem *e;
-	/*when lock is released, restore original priority
-	  if no other threads are waiting on the current thread's lock, 
-	  e.g., the thread has not acquired any other locks. */
-	if(list_empty(&sema->waiters)){
-		t->priority = t->initial_priority;
-	}
-	/*check if any other threads are waiting on the current thread's lock
-	  if so, donate the highest priority from another one of its waiters.
-	  (only if one of its waiters has a higher priority than it does)
-	  A thread can acquire multiple locks, which means multiple waiters 
-	  can be waiting for different locks acquired by one thread. */
-	else if(!list_empty(&sema->waiters)){
-		struct thread *max_waiter = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
-		if(max_waiter->priority > t->initial_priority){
-			t->priority = max_waiter->priority;
-		}
-	}
+	
 
 }
 
@@ -255,11 +232,31 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
+	ASSERT (lock != NULL);
+	ASSERT (lock_held_by_current_thread (lock));
 
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+	lock->holder = NULL;
+
+	struct thread *t = lock->holder; //thread that is holding this lock
+	/*when lock is released, restore original priority
+	  if no other threads are waiting on the current thread's lock, 
+	  e.g., the thread has not acquired any other locks. */
+	if(list_empty(&lock->semaphore.waiters)){
+		t->priority = t->initial_priority;
+	}
+	/*check if any other threads are waiting on the current thread's lock
+	  if so, donate the highest priority from another one of its waiters.
+	  (only if one of its waiters has a higher priority than it does)
+	  A thread can acquire multiple locks, which means multiple waiters 
+	  can be waiting for different locks acquired by one thread. */
+	else if(!list_empty(&lock->semaphore.waiters)){
+		struct thread *max_waiter = list_entry(list_max(&lock->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
+		if(max_waiter->priority > t->initial_priority){
+			t->priority = max_waiter->priority;
+		}
+	}
+
+	sema_up (&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
