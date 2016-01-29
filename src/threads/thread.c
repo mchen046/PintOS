@@ -396,13 +396,13 @@ struct thread * get_max_thread(void)
 void
 thread_set_priority (int new_priority) 
 {
-	  struct thread * t = thread_current();
-	  t->priority = new_priority;
-    //if the current thread no longer has the highest priority, yield it
-	  if(get_max_thread()->priority > new_priority)
-	  {
-	  	  thread_yield();
-	  }
+	struct thread * t = thread_current();
+	t->priority = new_priority;
+	//if the current thread no longer has the highest priority, yield it
+	if(get_max_thread()->priority > new_priority)
+	{
+		thread_yield();
+	}
 }
 
 /* Returns the current thread's priority. */
