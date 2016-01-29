@@ -209,7 +209,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  yield_all_execpt_one(); 
+  yield_all_except_one(); 
 
   return tid;
 }
@@ -568,9 +568,10 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else{
-	struct *t = list_entry (list_max (&ready_list, left_less_than_right, NULL), struct thread, elem); 
+	struct thread *t = list_entry(list_max(&ready_list, left_less_than_right, NULL), struct thread, elem); 
 	list_remove(&t->elem);
 	return t;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -655,7 +656,6 @@ allocate_tid (void)
 
   return tid;
 }
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
