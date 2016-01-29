@@ -92,8 +92,8 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
   
     int initial;
-    struct list locked;
-    struct list_elem hold_elem;
+    struct list locks; //list of lock that the current thread has acquired
+    struct list_elem sleep_elem; //list_elem for sleeping_list
     int64_t done_waiting;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -144,6 +144,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 int get_max_priority(struct thread *);
-static bool my_comparator_function(const struct list_elem *, const struct list_elem *, void *aux UNUSED);
+static bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 struct thread * get_max_thread(void);
 #endif /* threads/thread.h */
