@@ -393,9 +393,9 @@ struct thread * get_max_thread(void)
 }
 
 void
-yield_all_except_one (int new_priority){
+yield_all_except_one (void){
 	//if the current thread no longer has the highest priority, yield it
-	if(get_max_thread()->priority > new_priority)
+	if(get_max_thread()->priority > thread_current()->priority)
 	{
 		thread_yield();
 	}
@@ -407,7 +407,7 @@ thread_set_priority (int new_priority)
 {
 	struct thread * t = thread_current();
 	t->priority = new_priority;
-	yield_all_except_one(new_priority);
+	yield_all_except_one();
 }
 
 /* Returns the current thread's priority. */
