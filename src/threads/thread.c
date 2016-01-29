@@ -371,7 +371,8 @@ int get_max_priority(struct thread *t)
 }
 
 bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{//returns true if list entry from a is < list entry from b, else false
+{	
+	//returns true if list entry from a is < list entry from b, else false
 	struct thread * left = list_entry(a, struct thread, elem); //left = max
 	struct thread * right = list_entry(b, struct thread, elem);
 	if(get_max_priority(left) < get_max_priority(right))
@@ -526,6 +527,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->initial_priority = priority; //save initial priority for later restoration
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
