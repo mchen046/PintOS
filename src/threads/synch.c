@@ -236,7 +236,6 @@ lock_release (struct lock *lock)
 
 	lock->holder = NULL;
 
-	sema_up (&lock->semaphore);
 
 	//enum intr_level old_state;
 	//old_state = intr_disable();
@@ -263,6 +262,8 @@ lock_release (struct lock *lock)
 
 	yield_all_except_one();
 	//intr_set_level(old_state);
+	
+	sema_up (&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
