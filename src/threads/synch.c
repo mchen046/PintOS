@@ -116,7 +116,7 @@ sema_up (struct semaphore *sema)
 		//unblock the waiting thread with the highest priority
 		struct thread *max_waiting_thread = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
 		list_remove(&max_waiting_thread->elem);
-		thread_unblock(&max_waiting_thread); 
+		thread_unblock(max_waiting_thread); 
 		//thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
