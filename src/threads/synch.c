@@ -246,20 +246,20 @@ lock_release (struct lock *lock)
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
-	if(list_empty(&lock->semaphore.waiters)){
-		t->priority = t->initial_priority;
-	}
+	//if(list_empty(&lock->semaphore.waiters)){
+	t->priority = t->initial_priority;
+	//}
 	/*check if any other threads are waiting on the current thread's lock
 	  if so, donate the highest priority from another one of its waiters.
 	  (only if one of its waiters has a higher priority than it does)
 	  A thread can acquire multiple locks, which means multiple waiters 
 	  can be waiting for different locks acquired by one thread. */
-	else{ /*if(!list_empty(&lock->semaphore.waiters)){*/
+	/*else{ if(!list_empty(&lock->semaphore.waiters)){
 		struct thread *max_waiter = list_entry(list_max(&lock->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
 		if(max_waiter->priority > t->initial_priority){
 			t->priority = max_waiter->priority;
 		}
-	}
+	}*/
 
 	yield_all_except_one();
 	//intr_set_level(old_state);
