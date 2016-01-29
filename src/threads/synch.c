@@ -254,12 +254,12 @@ lock_release (struct lock *lock)
 	  (only if one of its waiters has a higher priority than it does)
 	  A thread can acquire multiple locks, which means multiple waiters 
 	  can be waiting for different locks acquired by one thread. */
-	/*else if(!list_empty(&lock->semaphore.waiters)){
+	else if(!list_empty(&lock->semaphore.waiters)){
 		struct thread *max_waiter = list_entry(list_max(&lock->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
 		if(max_waiter->priority > t->initial_priority){
 			t->priority = max_waiter->priority;
 		}
-	}*/
+	}
 
 	//intr_set_level(old_state);
 
