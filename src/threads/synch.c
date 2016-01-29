@@ -239,14 +239,10 @@ lock_release (struct lock *lock)
 
 	lock->holder = NULL;
 
-
-	sema_up (&lock->semaphore);
-	//enum intr_level old_state;
-	//old_state = intr_disable();
-
 	struct thread *t = thread_current();
 
 	list_remove(&lock->lock_elem);
+	sema_up (&lock->semaphore);
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
@@ -265,8 +261,6 @@ lock_release (struct lock *lock)
 		}
 	}*/
 
-	//yield_all_except_one();
-	//intr_set_level(old_state);
 }
 
 /* Returns true if the current thread holds LOCK, false
