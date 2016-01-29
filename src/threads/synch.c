@@ -117,13 +117,10 @@ sema_up (struct semaphore *sema)
 		struct thread *max_waiting_thread = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
 		list_remove(&max_waiting_thread->elem);
 		thread_unblock(max_waiting_thread); 
-		//thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
+
 	intr_set_level (old_level);
-
-	
-
 }
 
 static void sema_test_helper (void *sema_);
@@ -237,9 +234,14 @@ lock_release (struct lock *lock)
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	struct thread *t = lock->holder; //thread that is holding this lock
-
 	lock->holder = NULL;
+
+	sema_up (&lock->semaphore);
+
+	enum intr_level old_state;
+	old_state = intr_disable();
+
+	struct thread *t = thread_current();
 
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
@@ -258,8 +260,7 @@ lock_release (struct lock *lock)
 			t->priority = max_waiter->priority;
 		}
 	}
-
-	sema_up (&lock->semaphore);
+	yield_all_except_one();
 }
 
 /* Returns true if the current thread holds LOCK, false

@@ -392,17 +392,22 @@ struct thread * get_max_thread(void)
 	return max;
 }
 
+void
+yield_all_except_one (int new_priority){
+	//if the current thread no longer has the highest priority, yield it
+	if(get_max_thread()->priority > new_priority)
+	{
+		thread_yield();
+	}
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
 	struct thread * t = thread_current();
 	t->priority = new_priority;
-	//if the current thread no longer has the highest priority, yield it
-	if(get_max_thread()->priority > new_priority)
-	{
-		thread_yield();
-	}
+	yield_all_except_one(new_priority);
 }
 
 /* Returns the current thread's priority. */
