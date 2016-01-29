@@ -262,7 +262,7 @@ lock_release (struct lock *lock)
 		}
 	}*/
 
-	yield_all_except_one();
+	//yield_all_except_one();
 	//intr_set_level(old_state);
 }
 
