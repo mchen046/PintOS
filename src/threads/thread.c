@@ -355,7 +355,7 @@ int get_max_priority(struct thread *t)
 		for(e = list_begin(&t->locks); e != list_end(&t->locks); e = list_next(e))
 		{
 			acquired_lock = list_entry(e, struct lock, lock_elem);  
-			for(waiting_thread_elem = list_begin(&acquired_lock->semaphore.waiters); waiting_thread_elem != list_end(&acquired_lock->semaphore.waiters); waiting_thread_elem = list_next(acquired_lock))
+			for(waiting_thread_elem = list_begin(&acquired_lock->semaphore.waiters); waiting_thread_elem != list_end(&acquired_lock->semaphore.waiters); waiting_thread_elem = list_next(waiting_thread_elem))
 			{
 				waiting_thread = list_entry(waiting_thread_elem, struct thread, elem); //elem shared between thread.c and synch.c
 				val = get_max_priority(waiting_thread); /*recursive call to find the highest donated priority value
@@ -370,7 +370,7 @@ int get_max_priority(struct thread *t)
 	return max;
 }
 
-static bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {//returns true if list entry from a is < list entry from b, else false
 	struct thread * left = list_entry(a, struct thread, elem); //left = max
 	struct thread * right = list_entry(b, struct thread, elem);

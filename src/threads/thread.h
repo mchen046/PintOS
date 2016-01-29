@@ -144,6 +144,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 int get_max_priority(struct thread *);
-static bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool left_less_than_right(const struct list_elem *, const struct list_elem *, void *aux UNUSED);
 struct thread * get_max_thread(void);
 #endif /* threads/thread.h */
