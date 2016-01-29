@@ -381,7 +381,7 @@ static bool my_comparator_function(const struct list_elem *a, const struct list_
 	}
 }
 
-struct thread * max_thread(void)
+struct thread * get_max_thread(void)
 {
 	struct list_elem *local_max = list_max(&ready_list, my_comparator_function, NULL);
 	struct thread *global_max = list_entry(local_max, struct thread, elem);
@@ -393,10 +393,8 @@ void
 thread_set_priority (int new_priority) 
 {
 	  struct thread * curr = thread_current();
-  	  curr->initial = new_priority;
   	  curr->priority = new_priority;
-  	  struct thread *get_max_thread = max_thread();
-  	  if(get_max_thread->priority > new_priority)
+  	  if(get_max_thread()->priority > new_priority)
   	  {
   	  	  thread_yield();
   	  }
