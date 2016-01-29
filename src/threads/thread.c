@@ -228,8 +228,6 @@ thread_block (void)
 
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
-
-  yield_all_except_one();
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -252,8 +250,6 @@ thread_unblock (struct thread *t)
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-
-  yield_all_except_one();
 }
 
 /* Returns the name of the running thread. */
