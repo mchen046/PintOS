@@ -99,7 +99,7 @@ timer_sleep (int64_t ticks)
   //Do stuff that is sensitive to interrupts here 
   struct thread *t = thread_current();  //getting current thread
   t->done_waiting = timer_ticks() + ticks; //total ticks passed (including time since OS booted)
-  list_push_back(&sleeping_list, &t->hold_elem); 
+  list_push_back(&sleeping_list, &t->sleep_elem); 
   thread_block();
   intr_set_level(old_state);
 }
@@ -183,10 +183,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
 	struct list_elem *e;
 	for(e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e))
 	{
-		struct thread *i = list_entry(e, struct thread, hold_elem);
+		struct thread *i = list_entry(e, struct thread, sleep_elem);
 		if(i->done_waiting <= ticks)
 		{
-			list_remove(&i->hold_elem);
+			list_remove(&i->sleep_elem);
 			thread_unblock(i); 
 		} 
 	}

@@ -342,21 +342,24 @@ thread_foreach (thread_action_func *func, void *aux)
 //function TA made in class that works with donations 
 int get_max_priority(struct thread *t)
 {
-	struct list_elem * locks;
-	struct list_elem * waiting;
-	struct lock * picker;
-	struct thread * curr_t;
+	struct list_elem * e;
+	struct list_elem * waiting_thread_elem;
+	struct lock * acquired_lock;
+	struct thread * waiting_thread;
 	int val = 0;
 	int max = t->priority;
-	if(!list_empty(&t->locked))
+  //locks = list of locks that have been acquired by this current thread t
+	if(!list_empty(&t->locks)) //if list of locks that have been acquired by current thread t is not empty
 	{
-		for(locks = list_begin(&t->locked); locks != list_end(&t->locked); locks = list_next(locks))
+    //iterate through list of locks that current thread t has acquired
+		for(e = list_begin(&t->locks); e != list_end(&t->locks); e = list_next(e))
 		{
-			picker = list_entry(locks, struct lock, donations);
-			for(waiting = list_begin(&picker->semaphore.waiters); waiting != list_end(&picker->semaphore.waiters); waiting = list_next(picker))
+			acquired_lock = list_entry(e, struct lock, lock_elem);  
+			for(waiting_thread_elem = list_begin(&acquired_lock->semaphore.waiters); waiting_thread_elem != list_end(&acquired_lock->semaphore.waiters); waiting_thread_elem = list_next(waiting_thread_elem))
 			{
-				curr_t = list_entry(waiting, struct thread, elem);
-				val = get_max_priority(curr_t);
+				waiting_thread = list_entry(waiting_thread_elem, struct thread, elem); //elem shared between thread.c and synch.c
+				val = get_max_priority(waiting_thread); /*recursive call to find the highest donated priority value
+                                                and setting the new_priority to this highest donated priority value*/
 				if(val > max)
 				{
 					max = val;
@@ -367,9 +370,9 @@ int get_max_priority(struct thread *t)
 	return max;
 }
 
-static bool my_comparator_function(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool left_less_than_right(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {//returns true if list entry from a is < list entry from b, else false
-	struct thread * left = list_entry(a, struct thread, elem);
+	struct thread * left = list_entry(a, struct thread, elem); //left = max
 	struct thread * right = list_entry(b, struct thread, elem);
 	if(get_max_priority(left) < get_max_priority(right))
 	{
@@ -383,21 +386,22 @@ static bool my_comparator_function(const struct list_elem *a, const struct list_
 
 struct thread * get_max_thread(void)
 {
-	struct list_elem *local_max = list_max(&ready_list, my_comparator_function, NULL);
-	struct thread *global_max = list_entry(local_max, struct thread, elem);
-	return global_max;
+	struct list_elem *list_elem_max = list_max(&ready_list, left_less_than_right, NULL);
+	struct thread *max = list_entry(list_elem_max, struct thread, elem);
+	return max;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-	  struct thread * curr = thread_current();
-  	  curr->priority = new_priority;
-  	  if(get_max_thread()->priority > new_priority)
-  	  {
-  	  	  thread_yield();
-  	  }
+	  struct thread * t = thread_current();
+	  t->priority = new_priority;
+    //if the current thread no longer has the highest priority, yield it
+	  if(get_max_thread()->priority > new_priority)
+	  {
+	  	  thread_yield();
+	  }
 }
 
 /* Returns the current thread's priority. */
