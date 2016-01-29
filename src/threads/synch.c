@@ -238,8 +238,8 @@ lock_release (struct lock *lock)
 
 	sema_up (&lock->semaphore);
 
-	enum intr_level old_state;
-	old_state = intr_disable();
+	//enum intr_level old_state;
+	//old_state = intr_disable();
 
 	struct thread *t = thread_current();
 
@@ -260,6 +260,9 @@ lock_release (struct lock *lock)
 			t->priority = max_waiter->priority;
 		}
 	}
+
+	//intr_set_level(old_state);
+
 	yield_all_except_one();
 }
 
