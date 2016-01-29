@@ -235,9 +235,10 @@ lock_release (struct lock *lock)
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	struct thread *t = lock->holder; //thread that is holding this lock
+
 	lock->holder = NULL;
 
-	struct thread *t = lock->holder; //thread that is holding this lock
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
