@@ -392,8 +392,7 @@ struct thread * get_max_thread(void)
 	return max;
 }
 
-void
-yield_all_except_one (void){
+void yield_all_except_one (void){
 	//if the current thread no longer has the highest priority, yield it
 	if(get_max_thread()->priority > thread_current()->priority)
 	{
@@ -536,7 +535,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 
-  list_init(&locks);
+  list_init(&t->locks);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
