@@ -91,7 +91,7 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
   
-    int initial;
+    int initial_priority; //initial priority before donation
     struct list locks; //list of lock that the current thread has acquired
     struct list_elem sleep_elem; //list_elem for sleeping_list
     int64_t done_waiting;
