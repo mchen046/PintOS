@@ -236,31 +236,19 @@ lock_release (struct lock *lock)
 {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
 	lock->holder = NULL;
-
 	struct thread *t = thread_current();
-
 	list_remove(&lock->lock_elem);
 	sema_up (&lock->semaphore);
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
-	//if(list_empty(&lock->semaphore.waiters)){
 	t->priority = t->initial_priority;
-	//}
 	/*check if any other threads are waiting on the current thread's lock
 	  if so, donate the highest priority from another one of its waiters.
 	  (only if one of its waiters has a higher priority than it does)
 	  A thread can acquire multiple locks, which means multiple waiters 
 	  can be waiting for different locks acquired by one thread. */
-	/*else{ if(!list_empty(&lock->semaphore.waiters)){
-		struct thread *max_waiter = list_entry(list_max(&lock->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
-		if(max_waiter->priority > t->initial_priority){
-			t->priority = max_waiter->priority;
-		}
-	}*/
-
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -344,9 +332,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters))
+  { 
+    sema_up (&list_entry (list_max (&cond->waiters, left_less_than_right, NULL), struct semaphore_elem, elem)->semaphore);
+  }
+
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
