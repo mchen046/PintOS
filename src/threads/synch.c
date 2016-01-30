@@ -332,16 +332,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-<<<<<<< HEAD
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
-=======
   if (!list_empty (&cond->waiters))
   { 
     sema_up (&list_entry (list_max (&cond->waiters, left_less_than_right, NULL), struct semaphore_elem, elem)->semaphore);
   }
-
->>>>>>> b85b4106d214a46b6f0819d695d7270a7b7ee5b1
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
