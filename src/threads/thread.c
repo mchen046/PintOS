@@ -407,6 +407,7 @@ void
 thread_set_priority (int new_priority) 
 {
 	struct thread * t = thread_current();
+	t->initial_priority = new_priority;
 	t->priority = new_priority;
 	yield_all_except_one();
 }
