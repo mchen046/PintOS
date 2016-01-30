@@ -269,7 +269,7 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
-bool cond_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) //left_less_than_right
+bool cond_comparator_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) //left_less_than_right
 {
 	//returns true if list entry from a is < list entry from b, else false
 	struct semaphore_elem * left = list_entry(a, struct semaphore_elem, elem); //left = max
@@ -287,7 +287,7 @@ bool cond_comparator(const struct list_elem *a, const struct list_elem *b, void 
 		return true;
 	}
 	else
-	
+	{	
 		return false;
 	}
 }
@@ -357,8 +357,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters))
   { 
-    sema_up (&list_entry (list_max (&cond->waiters, cond_comparator, NULL), struct semaphore_elem, elem)->semaphore);
-	list_remove(list_max(&cond->waiters, cond_comparator, NULL));
+    sema_up (&list_entry (list_max (&cond->waiters, cond_comparator_func, NULL), struct semaphore_elem, elem)->semaphore);
+	list_remove(list_max(&cond->waiters, cond_comparator_func, NULL));
   }
 }
 
