@@ -336,7 +336,6 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   { 
     sema_up (&list_entry (list_max (&cond->waiters, left_less_than_right, NULL), struct semaphore_elem, elem)->semaphore);
   }
-
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
