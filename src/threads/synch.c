@@ -269,25 +269,25 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
-bool cond_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool cond_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) //left_less_than_right
 {
 	//returns true if list entry from a is < list entry from b, else false
 	struct semaphore_elem * left = list_entry(a, struct semaphore_elem, elem); //left = max
 	struct semaphore_elem * right = list_entry(b, struct semaphore_elem, elem);
-	if(!list_empty(&left->semaphore.waiters)){
-		return true;
-	}
-	if(!list_empty(&right->semaphore.waiters)){
+	if(list_empty(&left->semaphore.waiters)){ 
 		return false;
 	}
-	struct thread *c = list_entry(list_max(&left->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
-	struct thread *d = list_entry(list_max(&right->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
-	if(get_max_priority(c) < get_max_priority(d))
+	if(list_empty(&right->semaphore.waiters)){ // compare the waiting threads for the semaphores, if one has a greater priority than the other, return accordingly
+		return true;
+	}
+	struct thread *left_thread = list_entry(list_max(&left->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
+	struct thread *right_thread = list_entry(list_max(&right->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
+	if(get_max_priority(left_thread) < get_max_priority(right_thread))
 	{
 		return true;
 	}
 	else
-	{
+	
 		return false;
 	}
 }
