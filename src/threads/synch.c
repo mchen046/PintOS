@@ -358,6 +358,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   if (!list_empty (&cond->waiters))
   { 
     sema_up (&list_entry (list_max (&cond->waiters, cond_comparator, NULL), struct semaphore_elem, elem)->semaphore);
+	list_remove(list_max(&cond->waiters, cond_comparator, NULL));
   }
 }
 
