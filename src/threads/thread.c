@@ -209,6 +209,8 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  yield_all_except_one(); 
+
   return tid;
 }
 
@@ -392,17 +394,22 @@ struct thread * get_max_thread(void)
 	return max;
 }
 
+void yield_all_except_one (void){
+	//if the current thread no longer has the highest priority, yield it
+	if(get_max_thread()->priority > thread_current()->priority)
+	{
+		thread_yield();
+	}
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-	  struct thread * t = thread_current();
-	  t->priority = new_priority;
-    //if the current thread no longer has the highest priority, yield it
-	  if(get_max_thread()->priority > new_priority)
-	  {
-	  	  thread_yield();
-	  }
+	struct thread * t = thread_current();
+	t->initial_priority = new_priority;
+	t->priority = new_priority;
+	yield_all_except_one();
 }
 
 /* Returns the current thread's priority. */
@@ -530,6 +537,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->initial_priority = priority; //save initial priority for later restoration
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  list_init(&t->locks);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -555,8 +564,11 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+	struct thread *t = list_entry(list_max(&ready_list, left_less_than_right, NULL), struct thread, elem); 
+	list_remove(&t->elem);
+	return t;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -641,7 +653,6 @@ allocate_tid (void)
 
   return tid;
 }
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

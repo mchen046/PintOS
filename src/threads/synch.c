@@ -114,14 +114,15 @@ sema_up (struct semaphore *sema)
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)){
 		//unblock the waiting thread with the highest priority
-		thread_unblock(list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem)); 
-		//thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+		struct thread *max_waiting_thread = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
+		list_remove(&max_waiting_thread->elem);
+		thread_unblock(max_waiting_thread); 
 	}
 	sema->value++;
+
 	intr_set_level (old_level);
 
-	
-
+	yield_all_except_one();
 }
 
 static void sema_test_helper (void *sema_);
@@ -202,6 +203,7 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  list_push_back(&thread_current()->locks, &lock->lock_elem);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -235,29 +237,30 @@ lock_release (struct lock *lock)
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	struct thread *t = lock->holder; //thread that is holding this lock
-
 	lock->holder = NULL;
 
+	struct thread *t = thread_current();
+
+	list_remove(&lock->lock_elem);
+	sema_up (&lock->semaphore);
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
-	if(list_empty(&lock->semaphore.waiters)){
-		t->priority = t->initial_priority;
-	}
+	//if(list_empty(&lock->semaphore.waiters)){
+	t->priority = t->initial_priority;
+	//}
 	/*check if any other threads are waiting on the current thread's lock
 	  if so, donate the highest priority from another one of its waiters.
 	  (only if one of its waiters has a higher priority than it does)
 	  A thread can acquire multiple locks, which means multiple waiters 
 	  can be waiting for different locks acquired by one thread. */
-	else if(!list_empty(&lock->semaphore.waiters)){
+	/*else{ if(!list_empty(&lock->semaphore.waiters)){
 		struct thread *max_waiter = list_entry(list_max(&lock->semaphore.waiters, left_less_than_right, NULL), struct thread, elem);
 		if(max_waiter->priority > t->initial_priority){
 			t->priority = max_waiter->priority;
 		}
-	}
+	}*/
 
-	sema_up (&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false

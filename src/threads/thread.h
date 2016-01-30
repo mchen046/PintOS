@@ -115,6 +115,7 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
+void yield_all_except_one (void);
 void thread_tick (void);
 void thread_print_stats (void);
 
@@ -135,6 +136,7 @@ void thread_yield (void);
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
+void yield_all_execpt_one(void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
