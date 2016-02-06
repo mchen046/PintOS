@@ -20,7 +20,19 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
+//## Add this INCOMPLETE struct to process.c
+///* Struct used to share between process_execute() in the
+//   invoking thread and start_process() inside the newly invoked
+//      thread. */
+//
+struct exec_helper
+{
+	const char *file_name;    //## Program to load (entire command line)
+	struct sempaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
+	bool prog_succ;//##Add bool for determining if program loaded successfully
+	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
+};
+					      
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -28,20 +40,63 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  struct exec_helper exec;
+  char thread_name[16];
+  //char *fn_copy;     //get rid of this code as per TA guideline
   tid_t tid;
 
+  //#Set exec file name here
+  exec.file_name = file_name;
+  
+  //##Initialize a semaphore for loading here
+  exec.exec_sema = sema_init(exec.exec_sema, 1);
+
+  // Get rid of this as per TA guidline
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
+  /*fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  */
 
+  //##Add program name to thread_name, watch out for the size, strtok_r......
+  char *token;
+  char *saveptr;
+  token = strtok_r(exec.file_name, " ", &saveptr);
+  //my way - safer, probably works
+  /*unsigned int i = 0;
+  while(token[i] != NULL)
+  {
+  	  i++;
+  }
+
+  if((token != NULL) && (i <= 16)) 
+  {
+  	  for(unsigned int j = 0; j != i; j++)
+  	  {
+  	  	  thread_name[j] = token[j];
+  	  }
+  }*/
+  //michael's way - risky, don't know if it works
+  if((token != NULL) && (strlen(token) <= 16))
+  {
+  	  strcpy(thread_name, token);
+  }
+  
+  //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, exec);
+  //##remove fn_copy, Add exec to the end of these params
+  if (tid != TID_ERROR)
+  {
+  	  sema_down(&exec->exec_sema);
+  	  exec.prog_succ = load(thread_name);
+  	  if(exec.prog_succ)
+  	  {
+  	  	  ;
+  	  }
+  	  //palloc_free_page (fn_copy);  //got rid of as per TA guideline 
   return tid;
 }
 
