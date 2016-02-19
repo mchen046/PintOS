@@ -97,7 +97,7 @@ struct thread
     int64_t done_waiting;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    struct list children_list;      /*children of this thread*/
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
