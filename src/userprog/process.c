@@ -28,9 +28,10 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 struct exec_helper
 {
 	const char *file_name;    //## Program to load (entire command line)
-	struct sempaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
+	struct semaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
+	struct list_elem exec_children;
 };
 					      
 /* Starts a new thread running a user program loaded from
@@ -46,10 +47,11 @@ process_execute (const char *file_name)
   tid_t tid;
 
   //#Set exec file name here
+  //strlcpy(&exec.file_name, &file_name, sizeof(exec.file_name));
   exec.file_name = file_name;
   
   //##Initialize a semaphore for loading here
-  exec.exec_sema = sema_init(exec.exec_sema, 1);
+  sema_init(&exec.exec_sema, 1);
 
   // Get rid of this as per TA guidline
   /* Make a copy of FILE_NAME.
@@ -63,7 +65,7 @@ process_execute (const char *file_name)
   //##Add program name to thread_name, watch out for the size, strtok_r......
   char *token;
   char *saveptr;
-  token = strtok_r(exec.file_name, " ", &saveptr);
+  token = strtok_r(&exec.file_name, " ", &saveptr);
   //my way - safer, probably works
   /*unsigned int i = 0;
   while(token[i] != NULL)
@@ -81,23 +83,24 @@ process_execute (const char *file_name)
   //michael's way - risky, don't know if it works
   if((token != NULL) && (strlen(token) <= 16))
   {
-  	  strcpy(thread_name, token);
+  	  strlcpy(thread_name, token, sizeof(thread_name));
   }
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, exec);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, NULL);
   //##remove fn_copy, Add exec to the end of these params
   if (tid != TID_ERROR)
   {
-  	  sema_down(&exec->exec_sema);
-  	  exec.prog_succ = load(thread_name);
+  	  sema_down(&exec.exec_sema);
+  	  exec.prog_succ = load(thread_name, NULL, NULL);
   	  if(exec.prog_succ)
   	  {
-  	  	  ;
+  	  	  list_push_back(&current_thread()->children, &exec.exec_children);
   	  }
   	  //palloc_free_page (fn_copy);  //got rid of as per TA guideline 
-  return tid;
+	  return tid;
+  }
 }
 
 /* A thread function that loads a user process and starts it
