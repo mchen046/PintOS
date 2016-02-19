@@ -47,6 +47,7 @@ process_execute (const char *file_name)
   tid_t tid;
 
   //#Set exec file name here
+  exec.file_name = file_name;
   strlcpy(thread_name, file_name, sizeof(thread_name));
   //exec.file_name = file_name;
   
@@ -87,29 +88,32 @@ process_execute (const char *file_name)
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, NULL);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec);
   //##remove fn_copy, Add exec to the end of these params
   if (tid != TID_ERROR)
   {
   	  sema_down(&exec.exec_sema);
-  	  exec.prog_succ = load(thread_name, NULL, NULL);
   	  if(exec.prog_succ)
   	  {
   	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
   	  }
   	  //palloc_free_page (fn_copy);  //got rid of as per TA guideline 
-	  return tid;
   }
+  return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *exec_ )
 {
-  char *file_name = file_name_;
-  struct intr_frame if_;
-  bool success;
+	//points to our exec_helper struct
+	struct exec_helper *exec_ptr = exec_;
+	char temp[sizeof(&exec_ptr->file_name)];  //because we cannot point to a const char*, we need to convert to a char array
+	strlcpy(temp, exec_ptr->file_name, sizeof(temp));
+	char *file_name = temp; // THIS-----> &exec_ptr->file_name <---- DOES NOT WORK BUT IT IS THE FINAL IDEA..............points to the "command line" in the struct of exec_helper
+	struct intr_frame if_;
+	bool success;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -117,7 +121,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-
+  exec_ptr->prog_succ = success;  //allow the parent thread to communicate
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -131,6 +135,7 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+  sema_up(&exec_ptr->exec_sema);	//sema up regardless of pass or fail to allow parent to run and tell it that the child tried 
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
