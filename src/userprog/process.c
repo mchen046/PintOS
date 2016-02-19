@@ -47,7 +47,8 @@ process_execute (const char *file_name)
   tid_t tid;
 
   //#Set exec file name here
-  exec.file_name = file_name;
+  strlcpy(thread_name, file_name, sizeof(thread_name));
+  //exec.file_name = file_name;
   
   //##Initialize a semaphore for loading here
   sema_init(&exec.exec_sema, 1);
@@ -63,7 +64,7 @@ process_execute (const char *file_name)
 
   //##Add program name to thread_name, watch out for the size, strtok_r......
   char *saveptr;
-  char *token = strtok_r(&exec.file_name, " ", &saveptr);
+  char *token = strtok_r(thread_name, " ", &saveptr);
   //my way - safer, probably works
   /*unsigned int i = 0;
   while(token[i] != NULL)
@@ -94,7 +95,7 @@ process_execute (const char *file_name)
   	  exec.prog_succ = load(thread_name, NULL, NULL);
   	  if(exec.prog_succ)
   	  {
-  	  	  list_push_back(&current_thread()->children, &exec.exec_children);
+  	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
   	  }
   	  //palloc_free_page (fn_copy);  //got rid of as per TA guideline 
 	  return tid;
