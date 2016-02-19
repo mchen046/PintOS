@@ -47,7 +47,6 @@ process_execute (const char *file_name)
   tid_t tid;
 
   //#Set exec file name here
-  //strlcpy(&exec.file_name, &file_name, sizeof(exec.file_name));
   exec.file_name = file_name;
   
   //##Initialize a semaphore for loading here
@@ -63,9 +62,8 @@ process_execute (const char *file_name)
   */
 
   //##Add program name to thread_name, watch out for the size, strtok_r......
-  char *token;
   char *saveptr;
-  token = strtok_r(&exec.file_name, " ", &saveptr);
+  char *token = strtok_r(&exec.file_name, " ", &saveptr);
   //my way - safer, probably works
   /*unsigned int i = 0;
   while(token[i] != NULL)
