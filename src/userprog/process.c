@@ -32,6 +32,7 @@ struct exec_helper
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
 	struct list_elem exec_children;
+	tid_t exec_tid;
 };
 					      
 /* Starts a new thread running a user program loaded from
@@ -89,6 +90,7 @@ process_execute (const char *file_name)
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec);
+  exec.tid_exec = tid;
   //##remove fn_copy, Add exec to the end of these params
   if (tid != TID_ERROR)
   {
@@ -148,9 +150,28 @@ start_process (void *exec_ )
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+	struct list child_list = thread_current()->children_list;
+	struct exec_helper exec_helper_info;
+	struct list_elem * e;
+	bool found = false;
+	for(e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		exec_helper_info = list_entry(e, struct exec_helper, exec_children);
+		if(exec_helper_info.tid_exec == child_tid)
+		{
+			found = true;
+		}
+	}
+	if(!found || (child_tid == TID_ERROR))
+	{
+		return -1;
+	}
+	else  //check for the child exit code
+	{
+		return 0;
+	}
 }
 
 /* Free the current process's resources. */
