@@ -50,21 +50,11 @@ process_execute (const char *file_name)
   //#Set exec file name here
   exec.file_name = file_name;
   strlcpy(thread_name, file_name, sizeof(thread_name));
-  //exec.file_name = file_name;
   
   //##Initialize a semaphore for loading here
   sema_init(&exec.exec_sema, 1);
 
-  // Get rid of this as per TA guidline
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  /*fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
-  */
-
-  //##Add program name to thread_name, watch out for the size, strtok_r......
+    //##Add program name to thread_name, watch out for the size, strtok_r......
   char *saveptr;
   char *token = strtok_r(thread_name, " ", &saveptr);
   //my way - safer, probably works
@@ -89,9 +79,8 @@ process_execute (const char *file_name)
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec);
-  exec.tid_exec = tid;
-  //##remove fn_copy, Add exec to the end of these params
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec); //##remove fn_copy, Add exec to the end of these params
+  exec.tid_exec = tid; 
   if (tid != TID_ERROR)
   {
   	  sema_down(&exec.exec_sema);
@@ -99,7 +88,6 @@ process_execute (const char *file_name)
   	  {
   	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
   	  }
-  	  //palloc_free_page (fn_copy);  //got rid of as per TA guideline 
   }
   return tid;
 }
@@ -155,20 +143,20 @@ process_wait (tid_t child_tid)
 	struct list child_list = thread_current()->children_list;
 	struct exec_helper exec_helper_info;
 	struct list_elem * e;
-	bool found = false;
+	bool found = false; //bool for checking if child_tid is one of the current threads children
 	for(e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
 	{
-		exec_helper_info = list_entry(e, struct exec_helper, exec_children);
-		if(exec_helper_info.tid_exec == child_tid)
+		exec_helper_info = list_entry(e, struct exec_helper, exec_children); //grabbing the encompassing exec_helper struct
+		if(exec_helper_info.tid_exec == child_tid) //checking tid
 		{
 			found = true;
 		}
 	}
-	if(!found || (child_tid == TID_ERROR))
+	if(!found || (child_tid == TID_ERROR)) //if not found or TID is invalid
 	{
 		return -1;
 	}
-	else  //check for the child exit code
+	else  //check for the child exit code using sema between
 	{
 		return 0;
 	}
