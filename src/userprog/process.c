@@ -33,6 +33,7 @@ struct exec_helper
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
 	struct list_elem exec_children;
 	tid_t exec_tid;
+	struct hold_stat *waiter;
 };
 					      
 /* Starts a new thread running a user program loaded from
@@ -52,7 +53,7 @@ process_execute (const char *file_name)
   strlcpy(thread_name, file_name, sizeof(thread_name));
   
   //##Initialize a semaphore for loading here
-  sema_init(&exec.exec_sema, 1);
+  sema_init(&exec.exec_sema, 0);
 
     //##Add program name to thread_name, watch out for the size, strtok_r......
   char *saveptr;
@@ -88,12 +89,17 @@ process_execute (const char *file_name)
   	  {
   	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
   	  }
+  	  else
+  	  {
+  	  	  tid = TID_ERROR;
+  	  }
   }
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
+//TA helped us construct function with the following variables
 static void
 start_process (void *exec_ )
 {
@@ -111,9 +117,32 @@ start_process (void *exec_ )
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  if(success)
+  {
+  	  thread_current()->waiter = malloc(sizeof(*exec_ptr->waiter));
+  	  exec->waiter = thread_current()->waiter;
+  	  if(exec_ptr->waiter != NULL)
+  	  {
+  	  	  success = true;
+  	  }
+  	  else
+  	  {
+  	  	  success = false;
+  	  }
+  }
+
+  if(success)
+  {
+  	  lock_init(&exec_ptr->waiter->pick);
+  	  exec_ptr->waiter->todo_helper = 1;
+  	  exec_ptr->waiter->tid = thread_current()->tid;
+  	  sema_init(&exec_ptr->waiter->stat_sema, 0);
+  }
   exec_ptr->prog_succ = success;  //allow the parent thread to communicate
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  //palloc_free_page (file_name);
+  sema_up(&exec_ptr->exec_sema);	//sema up regardless of pass or fail to allow parent to run and tell it that the child tried 
   if (!success) 
     thread_exit ();
 
@@ -125,7 +154,6 @@ start_process (void *exec_ )
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
-  sema_up(&exec_ptr->exec_sema);	//sema up regardless of pass or fail to allow parent to run and tell it that the child tried 
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
