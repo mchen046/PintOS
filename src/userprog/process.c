@@ -168,7 +168,25 @@ start_process (void *exec_ )
 int
 process_wait (tid_t child_tid) 
 {
-	struct list child_list = thread_current()->children_list;
+	struct thread *t = thread_current();
+	struct list_elem *e;
+	struct hold_stat *t_child_stat;
+	int child_exit_stat;
+	int temp;
+	for(e = list_being(&t->children_list); e != list_end(&t->children_list); e = list_next(e))
+	{
+		t_child_stat = list_entry(e, struct hold_stat, elem);
+		if(t_child_stat->tid == child_tid)
+		{
+			list_remove(e);
+			sema_down(t_child_stat->stat_sema);
+			child_exit_stat = t_child_stat->exit_stat;
+			lost_acquire(&t
+			return child_exit_stat;
+
+	//this is our old way - TA said it wouldnt work but we were on the right track
+	
+	/*struct list child_list = thread_current()->children_list;
 	struct exec_helper exec_helper_info;
 	struct list_elem * e;
 	bool found = false; //bool for checking if child_tid is one of the current threads children
@@ -187,7 +205,7 @@ process_wait (tid_t child_tid)
 	else  //check for the child exit code using sema between
 	{
 		return 0;
-	}
+	}*/
 }
 
 /* Free the current process's resources. */
