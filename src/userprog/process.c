@@ -587,6 +587,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+/*Push function given to us by TA */
 static void * push(uint8_t *kpage, size_t *offset, const void *buf, size_t size)
 {
 	size_t padsize = ROUND_UP(size, sizeof(uint32_t));
@@ -600,6 +601,7 @@ static void * push(uint8_t *kpage, size_t *offset, const void *buf, size_t size)
 	return kpage + *offset + (padsize - size);
 }
 
+/* Will help us set up the stack being called in setup_stack. Skeleton template given by TA, implementation completed */
 static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *upage, void ** esp)
 {
 	size_t ofs = PGSIZE;
@@ -611,7 +613,7 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	int argc = 0;
 	char **argv;
 	char **argw;
-	void *buff_input;
+	void *uarg;
 
 	pushed_cmd = push(kpage, &ofs, cmd_line, strlen(cmd_line) + 1);
 	if(pushed_cmd == NULL)
@@ -625,17 +627,19 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 		return false;
 	}
 
+	//we must get argc
 	for(token = strtok_r(pushed_cmd, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
 	{
-		buff_input = upage + (token - (char *) kpage);
-		temp = push(kpage, &ofs, &buff_input, sizeof(buff_input));
+		uarg = upage + (token - (char *) kpage);
+		temp = push(kpage, &ofs, &uarg, sizeof(uarg));
 		if(temp == NULL)
 		{
 			return false;
 		}
 		argc++;
 	}
-
+	
+	//puts the commands in reverse order like the diagram in the instruction page
 	argv = (char **) (upage + ofs);
 	argw = (char **) (kpage + ofs);
 	int i = 0;
@@ -645,7 +649,8 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 		argw[0] = argw[i - 1];
 		argw[i - 1] = temp;
 	}
-
+	
+	//if any of the pushes are NULL then we have to return false
 	temp = push(kpage, &ofs, &argv, sizeof(argv));
 	token = push(kpage, &ofs, &argc, sizeof(argc));
 	saveptr = push(kpage, &ofs, &null, sizeof(null));
@@ -654,6 +659,7 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 		return false;
 	}
 
+	//if you've reached this point, everything is good and so return true
 	*esp = upage + ofs;
 	return true;
 }
@@ -673,15 +679,15 @@ setup_stack (const char *cmd_line, void **esp)
     	success = install_page (upage, kpage, true);
     	if (success)
     	{
-    		//*esp = PHYS_BASE;
+    		//*esp = PHYS_BASE;		//take out according to TA
     		success = setup_stack_helper(cmd_line, kpage, upage, esp);
     	}
     	else
     	{
     		palloc_free_page (kpage);
     	}
-    }
-    return success;
+  }
+  return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
