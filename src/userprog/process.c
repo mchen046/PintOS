@@ -34,6 +34,7 @@ struct exec_helper
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
 	struct list_elem exec_children;
 	tid_t exec_tid;
+	struct dir *exec_dir;
 	struct hold_stat *waiter;
 };
 					      
@@ -51,12 +52,25 @@ process_execute (const char *file_name)
 
   //#Set exec file name here
   exec.file_name = file_name;
-  strlcpy(thread_name, file_name, sizeof(thread_name));
-  
+  struct dir *cur_open_dir = thread_current()->cur_working_dir;
+  if(cur_open_dir != NULL)
+  {
+  	  exec.exec_dir = dir_reopen(cur_open_dir);
+  }
+  else
+  {
+  	  exec.exec_dir = dir_open_root();
+  }
+
+  if(exec.exec_dir == NULL)
+  {
+  	  return TID_ERROR;
+  }
   //##Initialize a semaphore for loading here
   sema_init(&exec.exec_sema, 0);
 
     //##Add program name to thread_name, watch out for the size, strtok_r......
+  strlcpy(thread_name, file_name, sizeof(thread_name));
   char *saveptr;
   char *token = strtok_r(thread_name, " ", &saveptr);
   //my way - safer, probably works
@@ -94,6 +108,10 @@ process_execute (const char *file_name)
   	  	  tid = TID_ERROR;
   	  }
   }
+  else
+  {
+  	  dir_close(exec.exec_dir);
+  }
   return tid;
 }
 
@@ -111,6 +129,7 @@ start_process (void *exec_ )
 	struct intr_frame if_;
 	bool success;
 
+	thread_current()->cur_working_dir = exec_ptr->exec_dir;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;

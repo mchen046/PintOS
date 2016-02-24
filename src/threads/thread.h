@@ -114,6 +114,11 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    //use for syscalls
+    struct dir *cur_working_dir;
+    struct list file_disc;
+    int latch;
+    struct list mem_map;
   };
 
 struct hold_stat {
