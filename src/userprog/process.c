@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -81,13 +82,12 @@ process_execute (const char *file_name)
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec); //##remove fn_copy, Add exec to the end of these params
-  exec.tid_exec = tid; 
   if (tid != TID_ERROR)
   {
   	  sema_down(&exec.exec_sema);
   	  if(exec.prog_succ)
   	  {
-  	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
+  	  	  list_push_back(&thread_current()->children_list, &exec.waiter->elem);
   	  }
   	  else
   	  {
@@ -105,9 +105,9 @@ start_process (void *exec_ )
 {
 	//points to our exec_helper struct
 	struct exec_helper *exec_ptr = exec_;
-	char temp[sizeof(&exec_ptr->file_name)];  //because we cannot point to a const char*, we need to convert to a char array
-	strlcpy(temp, exec_ptr->file_name, sizeof(temp));
-	char *file_name = temp; // THIS-----> &exec_ptr->file_name <---- DOES NOT WORK BUT IT IS THE FINAL IDEA..............points to the "command line" in the struct of exec_helper
+	//char temp[sizeof(&exec_ptr->file_name)];  //because we cannot point to a const char*, we need to convert to a char array
+	//strlcpy(temp, exec_ptr->file_name, sizeof(temp));
+	//char *file_name = temp; // THIS-----> &exec_ptr->file_name <---- DOES NOT WORK BUT IT IS THE FINAL IDEA..............points to the "command line" in the struct of exec_helper
 	struct intr_frame if_;
 	bool success;
 
@@ -116,12 +116,12 @@ start_process (void *exec_ )
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (exec_ptr->file_name, &if_.eip, &if_.esp);
 
   if(success)
   {
   	  thread_current()->waiter = malloc(sizeof(*exec_ptr->waiter));
-  	  exec->waiter = thread_current()->waiter;
+  	  exec_ptr->waiter = thread_current()->waiter;
   	  if(exec_ptr->waiter != NULL)
   	  {
   	  	  success = true;
@@ -156,6 +156,18 @@ start_process (void *exec_ )
   NOT_REACHED ();
 }
 
+static void unuse_process(struct hold_stat *ptr)
+{
+	int temp;
+	lock_acquire(&ptr->pick);
+	temp = --(ptr->todo_helper);
+	lock_release(&ptr->pick);
+	if(temp == -1)
+	{
+		free(ptr);
+	}
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -172,17 +184,19 @@ process_wait (tid_t child_tid)
 	struct list_elem *e;
 	struct hold_stat *t_child_stat;
 	int child_exit_stat;
-	int temp;
-	for(e = list_being(&t->children_list); e != list_end(&t->children_list); e = list_next(e))
+	for(e = list_begin(&t->children_list); e != list_end(&t->children_list); e = list_next(e))
 	{
 		t_child_stat = list_entry(e, struct hold_stat, elem);
 		if(t_child_stat->tid == child_tid)
 		{
 			list_remove(e);
-			sema_down(t_child_stat->stat_sema);
+			sema_down(&t_child_stat->stat_sema);
 			child_exit_stat = t_child_stat->exit_stat;
-			lost_acquire(&t
+			unuse_process(t_child_stat);
 			return child_exit_stat;
+		}
+	}
+	return -1;
 
 	//this is our old way - TA said it wouldnt work but we were on the right track
 	
@@ -215,6 +229,26 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  struct list_elem *e;
+  struct hold_stat *cur_proc;
+  printf("%s: exit(%d)\n", cur->name, cur->exit_stat);
+
+  if(cur->waiter != NULL)
+  {
+  	  cur_proc = cur->waiter;
+  	  cur_proc->exit_stat = cur->exit_stat;
+  	  sema_up(&cur_proc->stat_sema);
+  	  unuse_process(cur_proc);
+  }
+
+  for(e = list_begin(&cur->children_list); e != list_end(&cur->children_list); e = list_next(e))
+  {
+  	  cur_proc = list_entry(e, struct hold_stat, elem);
+  	  unuse_process(cur_proc);
+  }
+
+  //we must implement this here instead of in the load function
+  file_close(cur->exec_file);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -312,7 +346,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (const char *cmd_line, void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -322,10 +356,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
+//Follow guidelines from TA
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *cmd_line, void (**eip) (void), void **esp) //change file_name to cmd_line!
 {
   struct thread *t = thread_current ();
+  char file_name[NAME_MAX + 2];	//add a file name variable here, they are different
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
@@ -338,14 +374,24 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  //use strtok_r to remove file_name from cmd_line
+  char *saveptr;
+  char *token;
+  strlcpy(file_name, cmd_line, sizeof(file_name));
+  token = strtok_r(file_name, " ", &saveptr);
+  strlcpy(file_name, token, sizeof(file_name));
+
   /* Open executable file. */
+    //## Set the thread's bin file to this as well! It is super helpful to have each thread have a pointer to the file they are using for when you need to close it in process_exit
   file = filesys_open (file_name);
+  t->exec_file = file;
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+    //##Disable file write for 'file' here. GO TO BOTTOM. DON'T CHANGE ANYTHING IN THESE IF AND FOR STATEMENTS
+    file_deny_write(file);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -419,7 +465,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (cmd_line, esp))		////##Add cmd_line to setup_stack param here, also change setup_stack
     goto done;
 
   /* Start address. */
@@ -429,7 +475,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);    ##Remove this!!!!!!!!Since thread has its own file, close it when process is done (hint: in process exit.
   return success;
 }
 
@@ -544,7 +590,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (const char *cmd_line, void **esp) 
 {
   uint8_t *kpage;
   bool success = false;
