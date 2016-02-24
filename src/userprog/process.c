@@ -587,6 +587,77 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void * push(uint8_t *kpage, size_t *offset, const void *buf, size_t size)
+{
+	size_t padsize = ROUND_UP(size, sizeof(uint32_t));
+	if(*offset < padsize)
+	{
+		return NULL;
+	}
+
+	*offset -=padsize;
+	memcpy(kpage + *offset + (padsize - size), buf, size);
+	return kpage + *offset + (padsize - size);
+}
+
+static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *upage, void ** esp)
+{
+	size_t ofs = PGSIZE;
+	char *const null = NULL;
+	char *pushed_cmd;
+	char *temp;
+	char *token;
+	char *saveptr;
+	int argc = 0;
+	char **argv;
+	char **argw;
+	void *buff_input;
+
+	pushed_cmd = push(kpage, &ofs, cmd_line, strlen(cmd_line) + 1);
+	if(pushed_cmd == NULL)
+	{
+		return false;
+	}
+
+	temp = push(kpage, &ofs, &null, sizeof(NULL));
+	if(temp == NULL)
+	{
+		return false;
+	}
+
+	for(token = strtok_r(pushed_cmd, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
+	{
+		buff_input = upage + (token - (char *) kpage);
+		temp = push(kpage, &ofs, &buff_input, sizeof(buff_input));
+		if(temp == NULL)
+		{
+			return false;
+		}
+		argc++;
+	}
+
+	argv = (char **) (upage + ofs);
+	argw = (char **) (kpage + ofs);
+	int i = 0;
+	for(i = argc; i > 1; i -=2, argw++)
+	{
+		temp = argw[0];
+		argw[0] = argw[i - 1];
+		argw[i - 1] = temp;
+	}
+
+	temp = push(kpage, &ofs, &argv, sizeof(argv));
+	token = push(kpage, &ofs, &argc, sizeof(argc));
+	saveptr = push(kpage, &ofs, &null, sizeof(null));
+	if((temp == NULL) || (token == NULL) || (saveptr == NULL))
+	{
+		return false;
+	}
+
+	*esp = upage + ofs;
+	return true;
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -597,14 +668,20 @@ setup_stack (const char *cmd_line, void **esp)
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
+  {
+    	uint8_t *upage = ( (uint8_t *) PHYS_BASE ) - PGSIZE;
+    	success = install_page (upage, kpage, true);
+    	if (success)
+    	{
+    		//*esp = PHYS_BASE;
+    		success = setup_stack_helper(cmd_line, kpage, upage, esp);
+    	}
+    	else
+    	{
+    		palloc_free_page (kpage);
+    	}
     }
-  return success;
+    return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
