@@ -608,7 +608,7 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	char *const null = NULL;
 	char *pushed_cmd;
 	char *temp;
-	char *token;
+	char *karg;
 	char *saveptr;
 	int argc = 0;
 	char **argv;
@@ -628,9 +628,9 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	}
 
 	//we must get argc
-	for(token = strtok_r(pushed_cmd, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
+	for(karg = strtok_r(pushed_cmd, " ", &saveptr); karg != NULL; karg = strtok_r(NULL, " ", &saveptr))
 	{
-		uarg = upage + (token - (char *) kpage);
+		uarg = upage + (karg - (char *) kpage);
 		temp = push(kpage, &ofs, &uarg, sizeof(uarg));
 		if(temp == NULL)
 		{
@@ -652,9 +652,9 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	
 	//if any of the pushes are NULL then we have to return false
 	temp = push(kpage, &ofs, &argv, sizeof(argv));
-	token = push(kpage, &ofs, &argc, sizeof(argc));
+	karg = push(kpage, &ofs, &argc, sizeof(argc));
 	saveptr = push(kpage, &ofs, &null, sizeof(null));
-	if((temp == NULL) || (token == NULL) || (saveptr == NULL))
+	if((temp == NULL) || (karg == NULL) || (saveptr == NULL))
 	{
 		return false;
 	}
