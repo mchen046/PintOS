@@ -22,11 +22,11 @@ static int sys_create(const char *file, unsigned initial_size);
 static bool sys_remove(const char *file);
 static int sys_open(const char *file);
 static int sys_filesize(int fd);
-//static int sys_read(int fd, void *buffer, unsigned size);
-//static int sys_write(int fd, const void *buffer, unsigned size);
-//static void sys_seek(int fd, unsigned position);
-//static int sys_tell(int fd);
-//static void sys_close(int fd);
+static int sys_read(int fd, void *buffer, unsigned size);
+static int sys_write(int fd, void *buffer, unsigned size);
+static void sys_seek(int fd, unsigned position);
+static int sys_tell(int fd);
+static void sys_close(int fd);
 
 static bool verify_user (const void *uaddr);
 static void copy_in (void *dst_, const void *usrc_, size_t size);
@@ -67,11 +67,11 @@ static void syscall_handler (struct intr_frame *f)
 		{1, (function_to_call *) sys_remove},
 		{1, (function_to_call *) sys_open},
 		{1, (function_to_call *) sys_filesize},
-		//{3, (function_to_call *) sys_read},
-		//{3, (function_to_call *) sys_write},
-		//{2, (function_to_call *) sys_seek},
-		//{1, (function_to_call *) sys_tell},
-		//{1, (function_to_call *) sys_close},
+		{3, (function_to_call *) sys_read},
+		{3, (function_to_call *) sys_write},
+		{2, (function_to_call *) sys_seek},
+		{1, (function_to_call *) sys_tell},
+		{1, (function_to_call *) sys_close},
 	};
 	unsigned callNum;
 	int args[3];
@@ -285,3 +285,182 @@ static int sys_filesize(int fd)
 	lock_release(&file_sys_lock);
 	return give;
 }
+
+static int sys_read(int fd, void *buffer, unsigned size)
+{
+	uint8_t *buff_ptr = buffer;
+	struct file_info *fd_ptr = NULL;
+	int total = 0;
+
+	if(fd != STDIN_FILENO)
+	{
+		fd_ptr = searcher(fd);
+	}
+	if(fd_ptr == NULL)
+	{
+		return -1;
+	}
+
+	lock_acquire(&file_sys_lock);
+	while(size > 0)
+	{
+		size_t remaining = PGSIZE - pg_ofs(buff_ptr);
+		size_t gained;
+		if(size < remaining)
+		{
+			gained = size;
+		}
+		else
+		{
+			gained = remaining;
+		}
+		off_t bring_back;
+
+		if(!verify_user(buff_ptr))
+		{
+			lock_release(&file_sys_lock);
+			thread_exit();
+		}
+		if(fd == STDIN_FILENO)
+		{
+			strlcat(buff_ptr, input_getc(), 1);
+			bring_back = 1;
+		}
+		else
+		{
+			bring_back = file_read(fd_ptr->ptr_to_file, buff_ptr, gained);
+		}
+		if(bring_back < 0)
+		{
+			if(total == 0)
+			{
+				total = -1;
+			}
+			break;
+		}
+		total += bring_back;
+		if(bring_back != (off_t) gained)
+		{
+			break;
+		}
+		buff_ptr += gained;
+		size -= gained;
+	}
+	lock_release(&file_sys_lock);
+	return total;
+}
+
+static int sys_write(int fd,  void *buffer, unsigned size)
+{
+	uint8_t *buff = buffer;
+	struct file_info *fd_ptr = NULL;
+	int total = 0;
+
+	if(!verify_user(buffer) || !verify_user(buffer+size))
+	{
+		sys_exit(-1);
+	}
+	if(fd != STDOUT_FILENO)
+	{
+		fd_ptr = searcher(fd);
+	}
+	
+	lock_acquire(&file_sys_lock);
+	while(size > 0)
+	{
+		size_t remaining = PGSIZE - pg_ofs(buff);
+		size_t gained;
+		if(size < remaining)
+		{
+			gained = size;
+		}
+		else
+		{
+			gained = remaining;
+		}
+		off_t bring_back;
+
+		if(!verify_user(buff))
+		{
+			lock_release(&file_sys_lock);
+			sys_exit(-1);
+		}
+		if(fd == STDOUT_FILENO)
+		{
+			putbuf(buff, gained);
+			bring_back = gained;
+		}
+		else
+		{
+			bring_back = file_write(fd_ptr->ptr_to_file, buff, gained);
+		}
+		if(bring_back < 0)
+		{
+			if(total == 0)
+			{
+				total = -1;
+			}
+			break;
+		}
+		total += bring_back;
+
+		if(bring_back != (off_t) gained)
+		{
+			break;
+		}
+
+		buff += bring_back;
+		size -= bring_back;
+	}
+	lock_release(&file_sys_lock);
+
+	return total;
+}
+
+static void sys_seek(int fd, unsigned position)
+{
+	struct file_info *fd_ptr = searcher(fd);
+	if(fd_ptr == NULL)
+	{
+		thread_exit();
+	}
+	file_seek(fd_ptr->ptr_to_file, (off_t)position);
+}
+
+static int sys_tell(int fd)
+{
+	struct file_info *fd_ptr = searcher(fd);
+	if(fd_ptr == NULL)
+	{
+		thread_exit();
+	}
+	int dist = file_tell(fd_ptr->ptr_to_file);
+	return dist;
+}
+
+static void sys_close(int fd)
+{
+	struct file_info *fd_ptr = searcher(fd);
+	if(fd_ptr == NULL)
+	{
+		return;
+	}
+	lock_acquire(&file_sys_lock);
+	file_close(fd_ptr->ptr_to_file);
+	list_remove(&fd_ptr->elem);
+	lock_release(&file_sys_lock);
+}
+
+void syscall_exit(void)
+{
+	struct thread *t = thread_current();
+	struct list_elem *mover;
+	struct file_info *fd;
+	for(mover = list_begin(&t->file_disc); mover != list_end(&t->file_disc); mover = list_next(mover))
+	{
+		fd = list_entry(mover, struct file_info, elem);
+		file_close(fd->ptr_to_file);
+	}
+	return;
+}
+
