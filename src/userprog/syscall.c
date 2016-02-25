@@ -21,7 +21,7 @@ static int sys_wait(tid_t proc_id);
 static int sys_create(const char *file, unsigned initial_size);
 static bool sys_remove(const char *file);
 static int sys_open(const char *file);
-//static int sys_filesize(int fd);
+static int sys_filesize(int fd);
 //static int sys_read(int fd, void *buffer, unsigned size);
 //static int sys_write(int fd, const void *buffer, unsigned size);
 //static void sys_seek(int fd, unsigned position);
@@ -66,7 +66,7 @@ static void syscall_handler (struct intr_frame *f)
 		{2, (function_to_call *) sys_create},
 		{1, (function_to_call *) sys_remove},
 		{1, (function_to_call *) sys_open},
-		//{1, (function_to_call *) sys_filesize},
+		{1, (function_to_call *) sys_filesize},
 		//{3, (function_to_call *) sys_read},
 		//{3, (function_to_call *) sys_write},
 		//{2, (function_to_call *) sys_seek},
@@ -260,3 +260,28 @@ static int sys_open(const char *file)
 	return cur_stat;
 }
 
+static struct file_info *searcher(int looker)
+{
+	struct thread *t = thread_current();
+	struct list_elem *mover;
+	struct file_info *fd;
+	for(mover = list_begin(&t->file_disc); mover != list_end(&t->file_disc); mover = list_next(mover))
+	{
+		fd = list_entry(mover, struct file_info, elem);
+		if(fd->holder == looker)
+		{
+			return fd;
+		}
+	}
+	sys_exit(-1);
+	return (NULL);
+}
+
+static int sys_filesize(int fd)
+{
+	struct file_info *cur_fd = searcher(fd);
+	lock_acquire(&file_sys_lock);
+	int give = file_length(cur_fd->ptr_to_file);
+	lock_release(&file_sys_lock);
+	return give;
+}
