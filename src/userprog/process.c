@@ -32,9 +32,9 @@ struct exec_helper
 	struct semaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
-	struct list_elem exec_children;
-	tid_t exec_tid;
-	struct dir *exec_dir;
+	//struct list_elem exec_children;
+	//tid_t exec_tid;
+	//struct dir *exec_dir;
 	struct hold_stat *waiter;
 };
 					      
@@ -52,7 +52,7 @@ process_execute (const char *file_name)
 
   //#Set exec file name here
   exec.file_name = file_name;
-  struct dir *cur_open_dir = thread_current()->cur_working_dir;
+  /*struct dir *cur_open_dir = thread_current()->cur_working_dir;
   if(cur_open_dir != NULL)
   {
   	  exec.exec_dir = dir_reopen(cur_open_dir);
@@ -65,14 +65,15 @@ process_execute (const char *file_name)
   if(exec.exec_dir == NULL)
   {
   	  return TID_ERROR;
-  }
+  }*/
   //##Initialize a semaphore for loading here
   sema_init(&exec.exec_sema, 0);
 
     //##Add program name to thread_name, watch out for the size, strtok_r......
   strlcpy(thread_name, file_name, sizeof(thread_name));
   char *saveptr;
-  char *token = strtok_r(thread_name, " ", &saveptr);
+  //char *token = 
+  strtok_r(thread_name, " ", &saveptr);
   //my way - safer, probably works
   /*unsigned int i = 0;
   while(token[i] != NULL)
@@ -88,10 +89,10 @@ process_execute (const char *file_name)
   	  }
   }*/
   //michael's way - risky, don't know if it works
-  if((token != NULL) && (strlen(token) <= 16))
-  {
-  	  strlcpy(thread_name, token, sizeof(thread_name));
-  }
+  //if((token != NULL) && (strlen(token) <= 16))
+  //{
+  	 // strlcpy(thread_name, token, sizeof(thread_name));
+  //}
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
@@ -108,10 +109,10 @@ process_execute (const char *file_name)
   	  	  tid = TID_ERROR;
   	  }
   }
-  else
-  {
-  	  dir_close(exec.exec_dir);
-  }
+  //else
+  //{
+  	 // dir_close(exec.exec_dir);
+  //}
   return tid;
 }
 
@@ -129,7 +130,7 @@ start_process (void *exec_ )
 	struct intr_frame if_;
 	bool success;
 
-	thread_current()->cur_working_dir = exec_ptr->exec_dir;
+	//thread_current()->cur_working_dir = exec_ptr->exec_dir;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -139,23 +140,24 @@ start_process (void *exec_ )
 
   if(success)
   {
-  	  thread_current()->waiter = malloc(sizeof(*exec_ptr->waiter));
+  	  thread_current()->waiter = malloc(sizeof *exec_ptr->waiter);
   	  exec_ptr->waiter = thread_current()->waiter;
-  	  if(exec_ptr->waiter != NULL)
+  	  /*if(exec_ptr->waiter != NULL)
   	  {
   	  	  success = true;
   	  }
   	  else
   	  {
   	  	  success = false;
-  	  }
+  	  }*/
   }
 
   if(success)
   {
   	  lock_init(&exec_ptr->waiter->pick);
-  	  exec_ptr->waiter->todo_helper = 1;
+  	  exec_ptr->waiter->todo_helper = 2;
   	  exec_ptr->waiter->tid = thread_current()->tid;
+  	  exec_ptr->waiter->exit_stat = -1;
   	  sema_init(&exec_ptr->waiter->stat_sema, 0);
   }
   exec_ptr->prog_succ = success;  //allow the parent thread to communicate
@@ -181,7 +183,7 @@ static void unuse_process(struct hold_stat *ptr)
 	lock_acquire(&ptr->pick);
 	temp = --(ptr->todo_helper);
 	lock_release(&ptr->pick);
-	if(temp == -1)
+	if(temp == 0)
 	{
 		free(ptr);
 	}
@@ -208,10 +210,10 @@ process_wait (tid_t child_tid)
 		t_child_stat = list_entry(e, struct hold_stat, elem);
 		if(t_child_stat->tid == child_tid)
 		{
-			list_remove(e);
 			sema_down(&t_child_stat->stat_sema);
+			list_remove(e);
 			child_exit_stat = t_child_stat->exit_stat;
-			unuse_process(t_child_stat);
+			//unuse_process(t_child_stat);
 			return child_exit_stat;
 		}
 	}
@@ -250,13 +252,15 @@ process_exit (void)
 
   struct list_elem *e;
   struct hold_stat *cur_proc;
-  printf("%s: exit(%d)\n", cur->name, cur->exit_stat);
+  //we must implement this here instead of in the load function
+  file_close(cur->exec_file);
 
   if(cur->waiter != NULL)
   {
   	  cur_proc = cur->waiter;
-  	  cur_proc->exit_stat = cur->exit_stat;
-  	  sema_up(&cur_proc->stat_sema);
+  	  printf("%s: exit(%d)\n", cur->name, cur->exit_stat);
+  	  //cur_proc->exit_stat = cur->exit_stat;
+  	  //sema_up(&cur_proc->stat_sema);
   	  unuse_process(cur_proc);
   }
 
@@ -266,8 +270,9 @@ process_exit (void)
   	  unuse_process(cur_proc);
   }
 
-  //we must implement this here instead of in the load function
-  file_close(cur->exec_file);
+  /*//we must implement this here instead of in the load function
+  file_close(cur->exec_file);*/
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -394,12 +399,20 @@ load (const char *cmd_line, void (**eip) (void), void **esp) //change file_name 
   process_activate ();
 
   //use strtok_r to remove file_name from cmd_line
-  char *saveptr;
+  //char *saveptr;
   char *token;
+  while(*cmd_line == ' ')
+  {
+  	  cmd_line++;
+  }
   strlcpy(file_name, cmd_line, sizeof(file_name));
-  token = strtok_r(file_name, " ", &saveptr);
-  strlcpy(file_name, token, sizeof(file_name));
-
+  token = strchr(file_name, ' ');
+  //token = strtok_r(file_name, " ", &saveptr);
+  //strlcpy(file_name, token, sizeof(file_name));
+  if(token != NULL)
+  {
+  	  *token = '\0';
+  }
   /* Open executable file. */
     //## Set the thread's bin file to this as well! It is super helpful to have each thread have a pointer to the file they are using for when you need to close it in process_exit
   file = filesys_open (file_name);
@@ -662,11 +675,11 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	argv = (char **) (upage + ofs);
 	argw = (char **) (kpage + ofs);
 	int i = 0;
-	for(i = argc; i > 1; i -=2, argw++)
+	for(i = argc - 1; i > (argc-1)/2; i--)
 	{
-		temp = argw[0];
-		argw[0] = argw[i - 1];
-		argw[i - 1] = temp;
+		temp = argw[i];
+		argw[i] = argw[(argc-1)- 1];
+		argw[(argc-1) - 1] = temp;
 	}
 	
 	//if any of the pushes are NULL then we have to return false
