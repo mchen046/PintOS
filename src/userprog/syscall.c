@@ -22,13 +22,13 @@ static int our_exec(const char *cmd_line);
 static int our_wait(tid_t proc_id);
 static int our_create(const char *file, unsigned initial_size);
 static int our_remove(const char *file);
-static int our_open(const char *file);
-static int our_filesize(int fd);
-static int our_read(int fd, void *buffer, unsigned size);
-static int our_write(int fd, const void *buffer, unsigned size);
-static int our_seek(int fd, unsigned position);
-static int our_tell(int fd);
-static int our_close(int fd);
+//static int our_open(const char *file);
+//static int our_filesize(int fd);
+//static int our_read(int fd, void *buffer, unsigned size);
+//static int our_write(int fd, const void *buffer, unsigned size);
+//static int our_seek(int fd, unsigned position);
+//static int our_tell(int fd);
+//static int our_close(int fd);
 
 //the following are given functions
 static void syscall_handler (struct intr_frame *);
@@ -61,10 +61,10 @@ static void copy_in (void *dst_, const void *usrc_, size_t size)
 }
 
 /* Creates a copy of user string US in kernel memory
-*    and returns it as a page that must be freed with
-*       palloc_free_page().
-*          Truncates the string at PGSIZE bytes in size.
-*             Call thread_exit() if any of the user accesses are invalid. */
+*and returns it as a page that must be freed with
+*palloc_free_page().
+* Truncates the string at PGSIZE bytes in size.
+* Call thread_exit() if any of the user accesses are invalid. */
 static char *copy_in_string (const char *us) 
 {
 	char *ks;
@@ -76,7 +76,7 @@ static char *copy_in_string (const char *us)
 		
 	for (length = 0; length < PGSIZE; length++)
 	{
-		if (us >= (char *) PHYS_BASE || !get_user (ks + length, us++)) 
+		if (us >= (char *) PHYS_BASE || !get_user ((uint8_t *) (ks + length), (const uint8_t *) us++)) 
 		{
 			palloc_free_page (ks);
 			thread_exit ();
@@ -90,10 +90,10 @@ static char *copy_in_string (const char *us)
 
 /* Returns true if UADDR is a valid, mapped user address,
  *    false otherwise. */
-static bool verify_user (const void *uaddr) 
+/*static bool verify_user (const void *uaddr) 
 {
 	  return (uaddr < PHYS_BASE && pagedir_get_page (thread_current ()->pagedir, uaddr) != NULL);
-}
+}*/
 
 void syscall_init (void) 
 {
@@ -118,13 +118,13 @@ static const struct function_info table_of_funcs[] =
 	{1, (function_to_call *) our_wait},
 	{2, (function_to_call *) our_create},
 	{1, (function_to_call *) our_remove},
-	{1, (function_to_call *) our_open},
-	{1, (function_to_call *) our_filesize},
-	{3, (function_to_call *) our_read},
-	{3, (function_to_call *) our_write},
-	{2, (function_to_call *) our_seek},
-	{1, (function_to_call *) our_tell},
-	{1, (function_to_call *) our_close},
+	//{1, (function_to_call *) our_open},
+	//{1, (function_to_call *) our_filesize},
+	//{3, (function_to_call *) our_read},
+	//{3, (function_to_call *) our_write},
+	//{2, (function_to_call *) our_seek},
+	//{1, (function_to_call *) our_tell},
+	//{1, (function_to_call *) our_close},
 };
 
 static void syscall_handler (struct intr_frame *f)
@@ -188,3 +188,36 @@ static int our_create(const char *file, unsigned initial_size)
 	return check;
 }
 
+static int our_remove(const char *file)
+{
+	char *string_to_page = copy_in_string(file);
+	bool check = filesys_remove(string_to_page);
+	palloc_free_page(string_to_page);
+	return check;
+}
+
+/*struct fd_info
+{
+	struct list_elem elem;
+	struct file *ptr_to_file;
+	struct dir *cur_dir;
+	int holder;
+};
+
+static int our_open(const char *file)
+{
+	char *string_to_page = copy_in_string(file);
+	struct fd_info *fd;
+	int condition = -1;
+
+	fd = calloc(1, sizeof(*fd));
+	if(fd != NULL)
+	{
+		fd->file = filesys_open(string_to_page);
+		if(fd->file != NULL)
+		{
+
+		}
+	}
+}
+*/
