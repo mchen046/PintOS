@@ -2,18 +2,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <syscall-nr.h>
-#include "threads/interrupt.h"
-#include "threads/thread.h"
-#include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "filesys/file.h"
-#include "filesys/filesys.h"
-#include "threads/init.h"
-#include "threads/palloc.h"
-#include "threads/malloc.h"
-#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "threads/interrupt.h"
+#include "threads/malloc.h"
+#include "threads/palloc.h"
+#include "threads/thread.h"
+#include "threads/vaddr.h"
 
 static int sys_halt(void);
 //static int sys_exit(int status);
@@ -21,7 +20,7 @@ static int sys_exec(const char *cmd_line);
 static int sys_wait(tid_t proc_id);
 static int sys_create(const char *file, unsigned initial_size);
 static bool sys_remove(const char *file);
-//static int sys_open(const char *file);
+static int sys_open(const char *file);
 //static int sys_filesize(int fd);
 //static int sys_read(int fd, void *buffer, unsigned size);
 //static int sys_write(int fd, const void *buffer, unsigned size);
@@ -66,7 +65,7 @@ static void syscall_handler (struct intr_frame *f)
 		{1, (function_to_call *) sys_wait},
 		{2, (function_to_call *) sys_create},
 		{1, (function_to_call *) sys_remove},
-		//{1, (function_to_call *) sys_open},
+		{1, (function_to_call *) sys_open},
 		//{1, (function_to_call *) sys_filesize},
 		//{3, (function_to_call *) sys_read},
 		//{3, (function_to_call *) sys_write},
@@ -180,7 +179,7 @@ static int sys_halt(void)
 	shutdown_power_off();
 }
 
-static int sys_exit(int status)
+int sys_exit(int status)
 {
 	thread_current()->waiter->exit_stat = status;
 	thread_exit();
@@ -226,7 +225,6 @@ static bool sys_remove(const char *file)
 	return filesys_remove(file);
 }
 
-
 static int sys_open(const char *file)
 {
 	bool check = verify_user(file);
@@ -242,10 +240,23 @@ static int sys_open(const char *file)
 	fd = malloc(sizeof *fd);
 	if(fd != NULL)
 	{
-		lock_acquire(file_sys_lock);
+		lock_acquire(&file_sys_lock);
 		fd->ptr_to_file = filesys_open(file);
 		if(fd->ptr_to_file != NULL)
 		{
 			t = thread_current();
-			fd->holder = t->
+			fd->holder = t->latch++;
+			cur_stat = fd->holder;
+			list_push_front(&t->file_disc, &fd->elem);
+		}
+		else
+		{
+			free(fd);
+		}
+		lock_release(&file_sys_lock);
+	}
+
+	palloc_free_page(string_to_page);
+	return cur_stat;
 }
+
