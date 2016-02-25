@@ -142,6 +142,7 @@ start_process (void *exec_ )
   {
   	  thread_current()->waiter = malloc(sizeof *exec_ptr->waiter);
   	  exec_ptr->waiter = thread_current()->waiter;
+  	  success = exec_ptr->waiter != NULL;
   	  /*if(exec_ptr->waiter != NULL)
   	  {
   	  	  success = true;
@@ -181,7 +182,7 @@ static void unuse_process(struct hold_stat *ptr)
 {
 	int temp;
 	lock_acquire(&ptr->pick);
-	temp = --(ptr->todo_helper);
+	temp = --ptr->todo_helper;
 	lock_release(&ptr->pick);
 	if(temp == 0)
 	{
@@ -204,20 +205,20 @@ process_wait (tid_t child_tid)
 	struct thread *t = thread_current();
 	struct list_elem *e;
 	struct hold_stat *t_child_stat;
-	int child_exit_stat;
-	for(e = list_begin(&t->children_list); e != list_end(&t->children_list); e = list_next(e))
+	int child_exit_stat = -1;
+	for(e = list_begin(&(t->children_list)); e != list_end(&(t->children_list)); e = list_next(e))
 	{
 		t_child_stat = list_entry(e, struct hold_stat, elem);
 		if(t_child_stat->tid == child_tid)
 		{
 			sema_down(&t_child_stat->stat_sema);
-			list_remove(e);
 			child_exit_stat = t_child_stat->exit_stat;
-			//unuse_process(t_child_stat);
-			return child_exit_stat;
+			list_remove(&t_child_stat->elem);
+			unuse_process(t_child_stat);
+			break;
 		}
 	}
-	return -1;
+	return child_exit_stat;
 
 	//this is our old way - TA said it wouldnt work but we were on the right track
 	
@@ -251,6 +252,7 @@ process_exit (void)
   uint32_t *pd;
 
   struct list_elem *e;
+  struct list_elem *f;
   struct hold_stat *cur_proc;
   //we must implement this here instead of in the load function
   file_close(cur->exec_file);
@@ -258,15 +260,16 @@ process_exit (void)
   if(cur->waiter != NULL)
   {
   	  cur_proc = cur->waiter;
-  	  printf("%s: exit(%d)\n", cur->name, cur->exit_stat);
+  	  printf("%s: exit(%d)\n", cur->name, cur_proc->exit_stat);
   	  //cur_proc->exit_stat = cur->exit_stat;
-  	  //sema_up(&cur_proc->stat_sema);
   	  unuse_process(cur_proc);
+  	  sema_up(&cur_proc->stat_sema);
   }
 
-  for(e = list_begin(&cur->children_list); e != list_end(&cur->children_list); e = list_next(e))
+  for(e = list_begin(&cur->children_list); e != list_end(&cur->children_list); e = f)
   {
   	  cur_proc = list_entry(e, struct hold_stat, elem);
+  	  f = list_remove(e);
   	  unuse_process(cur_proc);
   }
 
@@ -619,6 +622,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void backwards(int argc, char **argv)
+{
+	int i;
+	char *temp;
+	for(i=argc-1; i>(argc-1)/2; i--)
+	{
+		temp = argv[i];
+		argv[i] = argv[(argc-1)-i];
+		argv[(argc-1)-i] = temp;
+	}
+	return;
+}
+
 /*Push function given to us by TA */
 static void * push(uint8_t *kpage, size_t *offset, const void *buf, size_t size)
 {
@@ -644,7 +660,6 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	char *saveptr;
 	int argc = 0;
 	char **argv;
-	char **argw;
 	void *uarg;
 
 	pushed_cmd = push(kpage, &ofs, cmd_line, strlen(cmd_line) + 1);
@@ -653,7 +668,7 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 		return false;
 	}
 
-	temp = push(kpage, &ofs, &null, sizeof(NULL));
+	temp = push(kpage, &ofs, &null, sizeof NULL );
 	if(temp == NULL)
 	{
 		return false;
@@ -663,7 +678,7 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	for(karg = strtok_r(pushed_cmd, " ", &saveptr); karg != NULL; karg = strtok_r(NULL, " ", &saveptr))
 	{
 		uarg = upage + (karg - (char *) kpage);
-		temp = push(kpage, &ofs, &uarg, sizeof(uarg));
+		temp = push(kpage, &ofs, &uarg, sizeof uarg);
 		if(temp == NULL)
 		{
 			return false;
@@ -673,19 +688,12 @@ static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *u
 	
 	//puts the commands in reverse order like the diagram in the instruction page
 	argv = (char **) (upage + ofs);
-	argw = (char **) (kpage + ofs);
-	int i = 0;
-	for(i = argc - 1; i > (argc-1)/2; i--)
-	{
-		temp = argw[i];
-		argw[i] = argw[(argc-1)- 1];
-		argw[(argc-1) - 1] = temp;
-	}
-	
+	backwards(argc, (char **) (kpage + ofs));
+
 	//if any of the pushes are NULL then we have to return false
-	temp = push(kpage, &ofs, &argv, sizeof(argv));
-	karg = push(kpage, &ofs, &argc, sizeof(argc));
-	saveptr = push(kpage, &ofs, &null, sizeof(null));
+	temp = push(kpage, &ofs, &argv, sizeof argv);
+	karg = push(kpage, &ofs, &argc, sizeof argc);
+	saveptr = push(kpage, &ofs, &null, sizeof null);
 	if((temp == NULL) || (karg == NULL) || (saveptr == NULL))
 	{
 		return false;

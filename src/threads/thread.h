@@ -92,10 +92,10 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     
     //use this for alarm clock and priority
-    int initial_priority; //initial priority before donation
-    struct list locks; //list of lock that the current thread has acquired
-    struct list_elem sleep_elem; //list_elem for sleeping_list
-    int64_t done_waiting;
+    //int initial_priority; //initial priority before donation
+    //struct list locks; //list of lock that the current thread has acquired
+    //struct list_elem sleep_elem; //list_elem for sleeping_list
+    //int64_t done_waiting;
 
 
     /* Shared between thread.c and synch.c. */
@@ -103,7 +103,7 @@ struct thread
     
     //use this section for process 
     struct list children_list;      /*children of this thread*/
-    int exit_stat;					/*exit status of the process*/
+    //int exit_stat;				/*exit status of the process*/
     struct hold_stat *waiter;		/* current process's status*/
     	
 #ifdef USERPROG

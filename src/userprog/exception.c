@@ -151,6 +151,7 @@ page_fault (struct intr_frame *f)
 
   if(user)
   {
+  	  f->eip = f->eax;
   	  sys_exit(-1);
   }
 

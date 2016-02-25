@@ -85,7 +85,7 @@ static void syscall_handler (struct intr_frame *f)
 	//##Get syscall number
 	copy_in (&callNum, f->esp, sizeof callNum);
 	//##Using the number find out which system call is being used
-	if(callNum >= (sizeof(table_of_funcs)/sizeof(*table_of_funcs)))
+	if(callNum >= sizeof table_of_funcs / sizeof *table_of_funcs)
 	{
 		thread_exit();
 	}
@@ -118,9 +118,9 @@ static bool verify_user (const void *uaddr)
 static inline bool get_user (uint8_t *dst, const uint8_t *usrc)
 {
 	int eax;
-	    asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
-	           : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
-	      return eax != 0;
+	asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
+	    : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
+	return eax != 0;
 }
 
 static inline bool put_user(uint8_t *udst, uint8_t byte)
@@ -162,7 +162,7 @@ static char *copy_in_string (const char *us)
 		
 	for (length = 0; length < PGSIZE; length++)
 	{
-		if (us >= (char *) PHYS_BASE || !get_user (/*(uint8_t *)*/ (ks + length), /*(const uint8_t *)*/ us++)) 
+		if (us >= (char *) PHYS_BASE || !get_user (ks + length, us++)) 
 		{
 			palloc_free_page (ks);
 			thread_exit ();
@@ -193,10 +193,13 @@ static int sys_exec(const char *cmd_line)
 		return -1;
 	}
 	char *string_to_page = copy_in_string(cmd_line);
+	if(string_to_page == NULL)
+	{
+		return -1;
+	}
 	int pid;
-	lock_acquire(&file_sys_lock);
 	pid = process_execute(string_to_page);
-	lock_release(&file_sys_lock);
+	palloc_free_page(string_to_page);
 	return pid;
 }
 
@@ -222,7 +225,11 @@ static bool sys_remove(const char *file)
 	{
 		sys_exit(-1);
 	}
-	return filesys_remove(file);
+	bool give = false;
+	char *string_to_page = copy_in_string(file);
+	give = filesys_remove(string_to_page);
+	palloc_free_page(string_to_page);
+	return give;
 }
 
 static int sys_open(const char *file)
@@ -237,11 +244,16 @@ static int sys_open(const char *file)
 	struct file_info *fd;
 	int cur_stat = -1;
 
+	if(string_to_page == NULL)
+	{
+		sys_exit(-1);
+	}
+
 	fd = malloc(sizeof *fd);
 	if(fd != NULL)
 	{
 		lock_acquire(&file_sys_lock);
-		fd->ptr_to_file = filesys_open(file);
+		fd->ptr_to_file = filesys_open(string_to_page);
 		if(fd->ptr_to_file != NULL)
 		{
 			t = thread_current();
@@ -292,6 +304,11 @@ static int sys_read(int fd, void *buffer, unsigned size)
 	struct file_info *fd_ptr = NULL;
 	int total = 0;
 
+	if(!verify_user(buffer) || !verify_user(buffer+size))
+	{
+		sys_exit(-1);
+	}
+
 	if(fd != STDIN_FILENO)
 	{
 		fd_ptr = searcher(fd);
@@ -301,7 +318,6 @@ static int sys_read(int fd, void *buffer, unsigned size)
 		return -1;
 	}
 
-	lock_acquire(&file_sys_lock);
 	while(size > 0)
 	{
 		size_t remaining = PGSIZE - pg_ofs(buff_ptr);
@@ -318,7 +334,6 @@ static int sys_read(int fd, void *buffer, unsigned size)
 
 		if(!verify_user(buff_ptr))
 		{
-			lock_release(&file_sys_lock);
 			thread_exit();
 		}
 		if(fd == STDIN_FILENO)
@@ -328,7 +343,9 @@ static int sys_read(int fd, void *buffer, unsigned size)
 		}
 		else
 		{
+			lock_acquire(&file_sys_lock);
 			bring_back = file_read(fd_ptr->ptr_to_file, buff_ptr, gained);
+			lock_release(&file_sys_lock);
 		}
 		if(bring_back < 0)
 		{
@@ -346,7 +363,6 @@ static int sys_read(int fd, void *buffer, unsigned size)
 		buff_ptr += gained;
 		size -= gained;
 	}
-	lock_release(&file_sys_lock);
 	return total;
 }
 
@@ -447,20 +463,23 @@ static void sys_close(int fd)
 	}
 	lock_acquire(&file_sys_lock);
 	file_close(fd_ptr->ptr_to_file);
-	list_remove(&fd_ptr->elem);
 	lock_release(&file_sys_lock);
+	list_remove(&fd_ptr->elem);
 }
 
 void syscall_exit(void)
 {
 	struct thread *t = thread_current();
 	struct list_elem *mover;
+	struct list_elem *jump;
 	struct file_info *fd;
-	for(mover = list_begin(&t->file_disc); mover != list_end(&t->file_disc); mover = list_next(mover))
+	for(mover = list_begin(&t->file_disc); mover != list_end(&t->file_disc); mover = jump)
 	{
 		fd = list_entry(mover, struct file_info, elem);
+		lock_acquire(&file_sys_lock);
+		jump = list_remove(mover);
 		file_close(fd->ptr_to_file);
+		lock_release(&file_sys_lock);
 	}
-	return;
 }
 
