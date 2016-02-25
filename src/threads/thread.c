@@ -537,10 +537,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  list_init(&t->children_list);
-  t->waiter = NULL;
+  list_init(&t->children_list);		//always remember to init your lists, causes many errors
+  t->waiter = NULL;		//we are waiting on nothing right now
   list_init(&t->file_disc);
-  t->latch = 2;
+  t->latch = 2;		//assume both parent and child are alive
   //t->initial_priority = priority; //save initial priority for later restoration
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);

@@ -103,7 +103,6 @@ struct thread
     
     //use this section for process 
     struct list children_list;      /*children of this thread*/
-    //int exit_stat;				/*exit status of the process*/
     struct hold_stat *waiter;		/* current process's status*/
     	
 #ifdef USERPROG
@@ -114,6 +113,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
     //use for syscalls
     struct list file_disc;
     int latch;

@@ -32,9 +32,6 @@ struct exec_helper
 	struct semaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
-	//struct list_elem exec_children;
-	//tid_t exec_tid;
-	//struct dir *exec_dir;
 	struct hold_stat *waiter;
 };
 					      
@@ -52,47 +49,13 @@ process_execute (const char *file_name)
 
   //#Set exec file name here
   exec.file_name = file_name;
-  /*struct dir *cur_open_dir = thread_current()->cur_working_dir;
-  if(cur_open_dir != NULL)
-  {
-  	  exec.exec_dir = dir_reopen(cur_open_dir);
-  }
-  else
-  {
-  	  exec.exec_dir = dir_open_root();
-  }
-
-  if(exec.exec_dir == NULL)
-  {
-  	  return TID_ERROR;
-  }*/
   //##Initialize a semaphore for loading here
   sema_init(&exec.exec_sema, 0);
-
-    //##Add program name to thread_name, watch out for the size, strtok_r......
+  
+  //##Add program name to thread_name, watch out for the size, strtok_r......
   strlcpy(thread_name, file_name, sizeof(thread_name));
   char *saveptr;
-  //char *token = 
   strtok_r(thread_name, " ", &saveptr);
-  //my way - safer, probably works
-  /*unsigned int i = 0;
-  while(token[i] != NULL)
-  {
-  	  i++;
-  }
-
-  if((token != NULL) && (i <= 16)) 
-  {
-  	  for(unsigned int j = 0; j != i; j++)
-  	  {
-  	  	  thread_name[j] = token[j];
-  	  }
-  }*/
-  //michael's way - risky, don't know if it works
-  //if((token != NULL) && (strlen(token) <= 16))
-  //{
-  	 // strlcpy(thread_name, token, sizeof(thread_name));
-  //}
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
@@ -109,10 +72,6 @@ process_execute (const char *file_name)
   	  	  tid = TID_ERROR;
   	  }
   }
-  //else
-  //{
-  	 // dir_close(exec.exec_dir);
-  //}
   return tid;
 }
 
@@ -124,9 +83,6 @@ start_process (void *exec_ )
 {
 	//points to our exec_helper struct
 	struct exec_helper *exec_ptr = exec_;
-	//char temp[sizeof(&exec_ptr->file_name)];  //because we cannot point to a const char*, we need to convert to a char array
-	//strlcpy(temp, exec_ptr->file_name, sizeof(temp));
-	//char *file_name = temp; // THIS-----> &exec_ptr->file_name <---- DOES NOT WORK BUT IT IS THE FINAL IDEA..............points to the "command line" in the struct of exec_helper
 	struct intr_frame if_;
 	bool success;
 
@@ -272,9 +228,6 @@ process_exit (void)
   	  f = list_remove(e);
   	  unuse_process(cur_proc);
   }
-
-  /*//we must implement this here instead of in the load function
-  file_close(cur->exec_file);*/
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
