@@ -90,22 +90,43 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-  
-    int initial_priority; //initial priority before donation
-    struct list locks; //list of lock that the current thread has acquired
-    struct list_elem sleep_elem; //list_elem for sleeping_list
-    int64_t done_waiting;
+    
+    //use this for alarm clock and priority
+    //int initial_priority; //initial priority before donation
+    //struct list locks; //list of lock that the current thread has acquired
+    //struct list_elem sleep_elem; //list_elem for sleeping_list
+    //int64_t done_waiting;
+
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    
+    //use this section for process 
     struct list children_list;      /*children of this thread*/
+    struct hold_stat *waiter;		/* current process's status*/
+    	
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct file *exec_file;
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    //use for syscalls
+    struct list file_disc;
+    int latch;
   };
+
+struct hold_stat {
+	tid_t tid;				/* child id when created */
+	int exit_stat;			/* strictly used for child's exit status*/
+	struct semaphore stat_sema;   /* always need semaphores to properly use threads with children*/
+	struct lock pick;			/* used as a barrier to change values*/
+	struct list_elem elem;   /* used to keep track of children  */
+	int todo_helper;		/* will help us figure out what is alive or dead (parent and child)*/
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -31,8 +32,7 @@ struct exec_helper
 	struct semaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
-	struct list_elem exec_children;
-	tid_t exec_tid;
+	struct hold_stat *waiter;
 };
 					      
 /* Starts a new thread running a user program loaded from
@@ -49,44 +49,27 @@ process_execute (const char *file_name)
 
   //#Set exec file name here
   exec.file_name = file_name;
-  strlcpy(thread_name, file_name, sizeof(thread_name));
-  
   //##Initialize a semaphore for loading here
-  sema_init(&exec.exec_sema, 1);
-
-    //##Add program name to thread_name, watch out for the size, strtok_r......
+  sema_init(&exec.exec_sema, 0);
+  
+  //##Add program name to thread_name, watch out for the size, strtok_r......
+  strlcpy(thread_name, file_name, sizeof(thread_name));
   char *saveptr;
-  char *token = strtok_r(thread_name, " ", &saveptr);
-  //my way - safer, probably works
-  /*unsigned int i = 0;
-  while(token[i] != NULL)
-  {
-  	  i++;
-  }
-
-  if((token != NULL) && (i <= 16)) 
-  {
-  	  for(unsigned int j = 0; j != i; j++)
-  	  {
-  	  	  thread_name[j] = token[j];
-  	  }
-  }*/
-  //michael's way - risky, don't know if it works
-  if((token != NULL) && (strlen(token) <= 16))
-  {
-  	  strlcpy(thread_name, token, sizeof(thread_name));
-  }
+  strtok_r(thread_name, " ", &saveptr);
   
   //Change file_name in thread_create to thread_name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, &exec); //##remove fn_copy, Add exec to the end of these params
-  exec.tid_exec = tid; 
   if (tid != TID_ERROR)
   {
   	  sema_down(&exec.exec_sema);
   	  if(exec.prog_succ)
   	  {
-  	  	  list_push_back(&thread_current()->children_list, &exec.exec_children);
+  	  	  list_push_back(&thread_current()->children_list, &exec.waiter->elem);
+  	  }
+  	  else
+  	  {
+  	  	  tid = TID_ERROR;
   	  }
   }
   return tid;
@@ -94,26 +77,50 @@ process_execute (const char *file_name)
 
 /* A thread function that loads a user process and starts it
    running. */
+//TA helped us construct function with the following variables
 static void
 start_process (void *exec_ )
 {
 	//points to our exec_helper struct
 	struct exec_helper *exec_ptr = exec_;
-	char temp[sizeof(&exec_ptr->file_name)];  //because we cannot point to a const char*, we need to convert to a char array
-	strlcpy(temp, exec_ptr->file_name, sizeof(temp));
-	char *file_name = temp; // THIS-----> &exec_ptr->file_name <---- DOES NOT WORK BUT IT IS THE FINAL IDEA..............points to the "command line" in the struct of exec_helper
 	struct intr_frame if_;
 	bool success;
 
+	//thread_current()->cur_working_dir = exec_ptr->exec_dir;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (exec_ptr->file_name, &if_.eip, &if_.esp);
+
+  if(success)
+  {
+  	  thread_current()->waiter = malloc(sizeof *exec_ptr->waiter);
+  	  exec_ptr->waiter = thread_current()->waiter;
+  	  success = exec_ptr->waiter != NULL;
+  	  /*if(exec_ptr->waiter != NULL)
+  	  {
+  	  	  success = true;
+  	  }
+  	  else
+  	  {
+  	  	  success = false;
+  	  }*/
+  }
+
+  if(success)
+  {
+  	  lock_init(&exec_ptr->waiter->pick);
+  	  exec_ptr->waiter->todo_helper = 2;
+  	  exec_ptr->waiter->tid = thread_current()->tid;
+  	  exec_ptr->waiter->exit_stat = -1;
+  	  sema_init(&exec_ptr->waiter->stat_sema, 0);
+  }
   exec_ptr->prog_succ = success;  //allow the parent thread to communicate
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  //palloc_free_page (file_name);
+  sema_up(&exec_ptr->exec_sema);	//sema up regardless of pass or fail to allow parent to run and tell it that the child tried 
   if (!success) 
     thread_exit ();
 
@@ -125,7 +132,18 @@ start_process (void *exec_ )
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
-  sema_up(&exec_ptr->exec_sema);	//sema up regardless of pass or fail to allow parent to run and tell it that the child tried 
+}
+
+static void unuse_process(struct hold_stat *ptr)
+{
+	int temp;
+	lock_acquire(&ptr->pick);
+	temp = --ptr->todo_helper;
+	lock_release(&ptr->pick);
+	if(temp == 0)
+	{
+		free(ptr);
+	}
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -140,7 +158,27 @@ start_process (void *exec_ )
 int
 process_wait (tid_t child_tid) 
 {
-	struct list child_list = thread_current()->children_list;
+	struct thread *t = thread_current();
+	struct list_elem *e;
+	struct hold_stat *t_child_stat;
+	int child_exit_stat = -1;
+	for(e = list_begin(&(t->children_list)); e != list_end(&(t->children_list)); e = list_next(e))
+	{
+		t_child_stat = list_entry(e, struct hold_stat, elem);
+		if(t_child_stat->tid == child_tid)
+		{
+			sema_down(&t_child_stat->stat_sema);
+			child_exit_stat = t_child_stat->exit_stat;
+			list_remove(&t_child_stat->elem);
+			unuse_process(t_child_stat);
+			break;
+		}
+	}
+	return child_exit_stat;
+
+	//this is our old way - TA said it wouldnt work but we were on the right track
+	
+	/*struct list child_list = thread_current()->children_list;
 	struct exec_helper exec_helper_info;
 	struct list_elem * e;
 	bool found = false; //bool for checking if child_tid is one of the current threads children
@@ -159,7 +197,7 @@ process_wait (tid_t child_tid)
 	else  //check for the child exit code using sema between
 	{
 		return 0;
-	}
+	}*/
 }
 
 /* Free the current process's resources. */
@@ -168,6 +206,28 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  struct list_elem *e;
+  struct list_elem *f;
+  struct hold_stat *cur_proc;
+  //we must implement this here instead of in the load function
+  file_close(cur->exec_file);
+
+  if(cur->waiter != NULL)
+  {
+  	  cur_proc = cur->waiter;
+  	  printf("%s: exit(%d)\n", cur->name, cur_proc->exit_stat);
+  	  //cur_proc->exit_stat = cur->exit_stat;
+  	  unuse_process(cur_proc);
+  	  sema_up(&cur_proc->stat_sema);
+  }
+
+  for(e = list_begin(&cur->children_list); e != list_end(&cur->children_list); e = f)
+  {
+  	  cur_proc = list_entry(e, struct hold_stat, elem);
+  	  f = list_remove(e);
+  	  unuse_process(cur_proc);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -266,7 +326,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (const char *cmd_line, void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -276,10 +336,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
+//Follow guidelines from TA
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *cmd_line, void (**eip) (void), void **esp) //change file_name to cmd_line!
 {
   struct thread *t = thread_current ();
+  char file_name[NAME_MAX + 2];	//add a file name variable here, they are different
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
@@ -292,14 +354,32 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  //use strtok_r to remove file_name from cmd_line
+  //char *saveptr;
+  char *token;
+  while(*cmd_line == ' ')
+  {
+  	  cmd_line++;
+  }
+  strlcpy(file_name, cmd_line, sizeof(file_name));
+  token = strchr(file_name, ' ');
+  //token = strtok_r(file_name, " ", &saveptr);
+  //strlcpy(file_name, token, sizeof(file_name));
+  if(token != NULL)
+  {
+  	  *token = '\0';
+  }
   /* Open executable file. */
+    //## Set the thread's bin file to this as well! It is super helpful to have each thread have a pointer to the file they are using for when you need to close it in process_exit
   file = filesys_open (file_name);
+  t->exec_file = file;
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+    //##Disable file write for 'file' here. GO TO BOTTOM. DON'T CHANGE ANYTHING IN THESE IF AND FOR STATEMENTS
+    file_deny_write(file);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -373,7 +453,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (cmd_line, esp))		////##Add cmd_line to setup_stack param here, also change setup_stack
     goto done;
 
   /* Start address. */
@@ -383,7 +463,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);    ##Remove this!!!!!!!!Since thread has its own file, close it when process is done (hint: in process exit.
   return success;
 }
 
@@ -495,23 +575,111 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void backwards(int argc, char **argv)
+{
+	int i;
+	char *temp;
+	for(i=argc-1; i>(argc-1)/2; i--)
+	{
+		temp = argv[i];
+		argv[i] = argv[(argc-1)-i];
+		argv[(argc-1)-i] = temp;
+	}
+	return;
+}
+
+/*Push function given to us by TA */
+static void * push(uint8_t *kpage, size_t *offset, const void *buf, size_t size)
+{
+	size_t padsize = ROUND_UP(size, sizeof(uint32_t));
+	if(*offset < padsize)
+	{
+		return NULL;
+	}
+
+	*offset -=padsize;
+	memcpy(kpage + *offset + (padsize - size), buf, size);
+	return kpage + *offset + (padsize - size);
+}
+
+/* Will help us set up the stack being called in setup_stack. Skeleton template given by TA, implementation completed */
+static bool setup_stack_helper (const char *cmd_line, uint8_t *kpage, uint8_t *upage, void ** esp)
+{
+	size_t ofs = PGSIZE;
+	char *const null = NULL;
+	char *pushed_cmd;
+	char *temp;
+	char *karg;
+	char *saveptr;
+	int argc = 0;
+	char **argv;
+	void *uarg;
+
+	pushed_cmd = push(kpage, &ofs, cmd_line, strlen(cmd_line) + 1);
+	if(pushed_cmd == NULL)
+	{
+		return false;
+	}
+
+	temp = push(kpage, &ofs, &null, sizeof NULL );
+	if(temp == NULL)
+	{
+		return false;
+	}
+
+	//we must get argc
+	for(karg = strtok_r(pushed_cmd, " ", &saveptr); karg != NULL; karg = strtok_r(NULL, " ", &saveptr))
+	{
+		uarg = upage + (karg - (char *) kpage);
+		temp = push(kpage, &ofs, &uarg, sizeof uarg);
+		if(temp == NULL)
+		{
+			return false;
+		}
+		argc++;
+	}
+	
+	//puts the commands in reverse order like the diagram in the instruction page
+	argv = (char **) (upage + ofs);
+	backwards(argc, (char **) (kpage + ofs));
+
+	//if any of the pushes are NULL then we have to return false
+	temp = push(kpage, &ofs, &argv, sizeof argv);
+	karg = push(kpage, &ofs, &argc, sizeof argc);
+	saveptr = push(kpage, &ofs, &null, sizeof null);
+	if((temp == NULL) || (karg == NULL) || (saveptr == NULL))
+	{
+		return false;
+	}
+
+	//if you've reached this point, everything is good and so return true
+	*esp = upage + ofs;
+	return true;
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (const char *cmd_line, void **esp) 
 {
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
+  {
+    	uint8_t *upage = ( (uint8_t *) PHYS_BASE ) - PGSIZE;
+    	success = install_page (upage, kpage, true);
+    	if (success)
+    	{
+    		//*esp = PHYS_BASE;		//take out according to TA
+    		success = setup_stack_helper(cmd_line, kpage, upage, esp);
+    	}
+    	else
+    	{
+    		palloc_free_page (kpage);
+    	}
+  }
   return success;
 }
 
