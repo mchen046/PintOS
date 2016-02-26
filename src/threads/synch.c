@@ -115,16 +115,16 @@ sema_up (struct semaphore *sema)
 	if (!list_empty (&sema->waiters))
 	{
 		//unblock the waiting thread with the highest priority
-		//struct thread *max_waiting_thread = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
-		//list_remove(&max_waiting_thread->elem);
-		//thread_unblock(max_waiting_thread); 
-		thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+		struct thread *max_waiting_thread = list_entry(list_max(&sema->waiters, left_less_than_right, NULL), struct thread, elem);
+		list_remove(&max_waiting_thread->elem);
+		thread_unblock(max_waiting_thread); 
+		//thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
 
 	intr_set_level (old_level);
 
-	//yield_all_except_one();
+	yield_all_except_one();
 }
 
 static void sema_test_helper (void *sema_);
@@ -205,7 +205,7 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
-  //list_push_back(&thread_current()->locks, &lock->lock_elem);
+  list_push_back(&thread_current()->locks, &lock->lock_elem);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -239,13 +239,13 @@ lock_release (struct lock *lock)
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 	lock->holder = NULL;
-	//struct thread *t = thread_current();
-	//list_remove(&lock->lock_elem);
+	struct thread *t = thread_current();
+	list_remove(&lock->lock_elem);
 	sema_up (&lock->semaphore);
 	/*when lock is released, restore original priority
 	  if no other threads are waiting on the current thread's lock, 
 	  e.g., the thread has not acquired any other locks. */
-	//t->priority = t->initial_priority;
+	t->priority = t->initial_priority;
 	/*check if any other threads are waiting on the current thread's lock
 	  if so, donate the highest priority from another one of its waiters.
 	  (only if one of its waiters has a higher priority than it does)
@@ -270,7 +270,7 @@ struct semaphore_elem
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
   };
-/*
+
 bool cond_comparator_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) //left_less_than_right
 {
 	//returns true if list entry from a is < list entry from b, else false
@@ -293,7 +293,7 @@ bool cond_comparator_func(const struct list_elem *a, const struct list_elem *b, 
 		return false;
 	}
 }
-*/
+
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
@@ -359,9 +359,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters))
   { 
-    //sema_up (&list_entry (list_max (&cond->waiters, cond_comparator_func, NULL), struct semaphore_elem, elem)->semaphore);
-	//list_remove(list_max(&cond->waiters, cond_comparator_func, NULL));
-  	  sema_up(&list_entry (list_pop_front(&cond->waiters),struct semaphore_elem, elem)->semaphore);
+    sema_up (&list_entry (list_max (&cond->waiters, cond_comparator_func, NULL), struct semaphore_elem, elem)->semaphore);
+	list_remove(list_max(&cond->waiters, cond_comparator_func, NULL));
+  	//sema_up(&list_entry (list_pop_front(&cond->waiters),struct semaphore_elem, elem)->semaphore);
   }
 }
 

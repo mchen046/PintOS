@@ -210,7 +210,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  //yield_all_except_one(); 
+  yield_all_except_one(); 
 
   return tid;
 }
@@ -342,7 +342,7 @@ thread_foreach (thread_action_func *func, void *aux)
       func (t, aux);
     }
 }
-/*
+
 //function TA made in class that works with donations 
 int get_max_priority(struct thread *t)
 {
@@ -364,7 +364,7 @@ int get_max_priority(struct thread *t)
 				waiting_thread = list_entry(waiting_thread_elem, struct thread, elem); //elem shared between thread.c and synch.c
 				val = get_max_priority(waiting_thread); /*recursive call to find the highest donated priority value
                                                 and setting the new_priority to this highest donated priority value*/
-/*				if(val > max)
+				if(val > max)
 				{
 					max = val;
 				}
@@ -403,23 +403,23 @@ void yield_all_except_one (void){
 		thread_yield();
 	}
 }
-*/
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
 	struct thread * t = thread_current();
-	//t->initial_priority = new_priority;
+	t->initial_priority = new_priority;
 	t->priority = new_priority;
-	//yield_all_except_one();
+	yield_all_except_one();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  //return get_max_priority(thread_current());
-  return thread_current()->priority;
+  return get_max_priority(thread_current());
+  //return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -541,8 +541,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->waiter = NULL;		//we are waiting on nothing right now
   list_init(&t->file_disc);
   t->latch = 2;		//assume both parent and child are alive
-  //t->initial_priority = priority; //save initial priority for later restoration
+  t->initial_priority = priority; //save initial priority for later restoration
   t->magic = THREAD_MAGIC;
+  list_init(&t->locks);
+
   list_push_back (&all_list, &t->allelem);
 
 }
@@ -571,10 +573,10 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else{
-	//struct thread *t = list_entry(list_max(&ready_list, left_less_than_right, NULL), struct thread, elem); 
-	//list_remove(&t->elem);
-	//return t;
-	return list_entry (list_pop_front (&ready_list), struct thread,elem);
+	struct thread *t = list_entry(list_max(&ready_list, left_less_than_right, NULL), struct thread, elem); 
+	list_remove(&t->elem);
+	return t;
+	//return list_entry (list_pop_front (&ready_list), struct thread,elem);
   }
 }
 

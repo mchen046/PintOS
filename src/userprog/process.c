@@ -32,7 +32,7 @@ struct exec_helper
 	struct semaphore exec_sema;//##Add semaphore for loading (for resource race cases!)
 	bool prog_succ;//##Add bool for determining if program loaded successfully
 	//## Add other stuff you need to transfer between process_execute and process_start (hint, think of the children... need a way to add to the child's list, see below about thread's child list.)
-	struct hold_stat *waiter;
+	struct hold_stat *waiter; //
 };
 					      
 /* Starts a new thread running a user program loaded from
@@ -112,9 +112,9 @@ start_process (void *exec_ )
   if(success)
   {
   	  lock_init(&exec_ptr->waiter->pick);
-  	  exec_ptr->waiter->todo_helper = 2;
+  	  exec_ptr->waiter->todo_helper = 2; //both child and parent are alive
   	  exec_ptr->waiter->tid = thread_current()->tid;
-  	  exec_ptr->waiter->exit_stat = -1;
+  	  exec_ptr->waiter->exit_stat = -1; //child is dead
   	  sema_init(&exec_ptr->waiter->stat_sema, 0);
   }
   exec_ptr->prog_succ = success;  //allow the parent thread to communicate
@@ -161,7 +161,7 @@ process_wait (tid_t child_tid)
 	struct thread *t = thread_current();
 	struct list_elem *e;
 	struct hold_stat *t_child_stat;
-	int child_exit_stat = -1;
+	int child_exit_stat = -1; 
 	for(e = list_begin(&(t->children_list)); e != list_end(&(t->children_list)); e = list_next(e))
 	{
 		t_child_stat = list_entry(e, struct hold_stat, elem);
@@ -211,17 +211,18 @@ process_exit (void)
   struct list_elem *f;
   struct hold_stat *cur_proc;
   //we must implement this here instead of in the load function
-  file_close(cur->exec_file);
+  file_close(cur->exec_file); //close program
 
   if(cur->waiter != NULL)
   {
-  	  cur_proc = cur->waiter;
+  	  cur_proc = cur->waiter; //setting cur_proc to its parent process
   	  printf("%s: exit(%d)\n", cur->name, cur_proc->exit_stat);
   	  //cur_proc->exit_stat = cur->exit_stat;
-  	  unuse_process(cur_proc);
-  	  sema_up(&cur_proc->stat_sema);
+  	  unuse_process(cur_proc); //setting/deallocating processes respectively
+  	  sema_up(&cur_proc->stat_sema); //signal parent to start running again
   }
 
+  //check for any additional siblings that need to be run before the parent
   for(e = list_begin(&cur->children_list); e != list_end(&cur->children_list); e = f)
   {
   	  cur_proc = list_entry(e, struct hold_stat, elem);
