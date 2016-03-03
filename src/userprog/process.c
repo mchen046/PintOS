@@ -81,6 +81,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *exec_ )
 {
+	//fixing no-vm/multi-oom
 	//points to our exec_helper struct
 	struct exec_helper *exec_ptr = exec_;
 	struct intr_frame if_;
